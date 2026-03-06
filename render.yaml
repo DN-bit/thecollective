@@ -14,6 +14,26 @@ services:
           name: collective-db
           property: connectionString
 
+  - type: cron
+    name: collective-ingestor
+    runtime: python
+    plan: starter
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    schedule: "0 */2 * * *"   # every 2 hours
+    startCommand: python pipeline/ingestor.py
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: collective-db
+          property: connectionString
+      - key: API_BASE_URL
+        value: https://collective-api-3plq.onrender.com
+      - key: CRYPTOPANIC_API_KEY
+        sync: false
+
 databases:
   - name: collective-db
-    plan: free
+    plan: starter
