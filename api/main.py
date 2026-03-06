@@ -1,66 +1,58 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
-import os
-import json
-from datetime import datetime
-
-app = FastAPI(title="The Collective", version="0.2.0")
-
-app.add_middleware(
-   CORSMiddleware,
-   allow_origins=["*"],
-   allow_credentials=True,
-   allow_methods=["*"],
-   allow_headers=["*"],
-)
-
-class EventRequest(BaseModel):
-   description: str
-   domain: str = "macro"
-   impact: float = 0.5
-
-@app.get("/")
-def root():
-   return {"name": "The Collective", "version": "0.2.0", "status": "operational"}
-
-@app.get("/health")
-def health():
-   return {"status": "healthy", "timestamp": datetime.now().isoformat()}
-
-@app.get("/stats")
-def stats():
+async def judge(event_id: str, evaluation: JudgeEvaluation):
+   """Arca judges submit evaluations here"""
    corpus_path = "/tmp/corpus.jsonl"
-   corpus_size = 0
-   total_quality = 0.0
+
+   try:
+       # Read corpus
+       entries = []
+       with open(corpus_path, 'r') as f:
+           for line in f:
+               entries.append(json.loads(line))
+
+       # Find and update entry
+       for entry in entries:
+           if entry["event_id"] == event_id:
+               entry["quality_score"] = evaluation.score
+               entry["judged"] = True
+               entry["judge_feedback"] = evaluation.feedback
+               entry["accepted"] = evaluation.accepted
+
+               # Rewrite corpus
+               with open(corpus_path, 'w') as f:
+                   for e in entries:
+                       f.write(json.dumps(e) + '\n')
+
+               return {
+                   "status": "judged",
+                   "event_id": event_id,
+                   "score": evaluation.score,
+                   "accepted": evaluation.accepted
+               }
+
+       return {"status": "error", "error": "Event not found"}
+
+   except Exception as e:
+       return {"status": "error", "error": str(e)}
+
+@app.get("/pending")
+def pending():
+   """Get intelligence waiting for judge evaluation"""
+   corpus_path = "/tmp/corpus.jsonl"
+   pending_items = []
 
    try:
        if os.path.exists(corpus_path):
            with open(corpus_path, 'r') as f:
                for line in f:
-                   if line.strip():
-                       entry = json.loads(line)
-                       corpus_size += 1
-                       total_quality += entry.get('metadata', {}).get('avg_quality', 0)
+                   entry = json.loads(line)
+                   if not entry.get("judged", False):
+                       pending_items.append({
+                           "event_id": entry["event_id"],
+                           "domain": entry["domain"],
+                           "description": entry["intelligence"].get("input_event", "Unknown"),
+                           "confidence": entry["confidence"]
+                       })
    except:
        pass
 
-   avg_quality = total_quality / corpus_size if corpus_size > 0 else 0.0
-
-   return {
-       "corpus_size": corpus_size,
-       "total_events": corpus_size,
-       "acceptance_rate": 0.67 if corpus_size > 0 else 0.0,
-       "avg_quality": round(avg_quality, 2),
-       "last_training": None
-   }
-
-@app.post("/generate")
-async def generate(request: EventRequest):
-   return {
-       "event_id": f"evt_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-       "description": request.description,
-       "domain": request.domain,
-       "status": "queued"
-   }
+   return {"pending": pending_items, "count": len(pending_items)}
