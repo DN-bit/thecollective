@@ -358,3 +358,219 @@ async def debug():
         return {"status": "ok", "response": response.choices[0].message.content}
     except Exception as e:
         return {"status": "error", "error": str(e), "type": type(e).__name__}
+
+@app.on_event("startup")
+async def sync_assets_on_startup():
+    """Sync top 100 assets from CoinGecko on startup."""
+    try:
+        conn = await get_db_conn()
+        # Create tables if needed
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS assets (
+                id SERIAL PRIMARY KEY,
+                coin_id TEXT UNIQUE NOT NULL,
+                symbol TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sector TEXT,
+                market_cap_rank INTEGER,
+                market_cap_usd FLOAT,
+                current_price_usd FLOAT,
+                price_change_24h FLOAT,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS portfolio_impacts (
+                id SERIAL PRIMARY KEY,
+                event_id TEXT NOT NULL,
+                coin_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                name TEXT NOT NULL,
+                impact_direction TEXT,
+                impact_severity TEXT,
+                rationale TEXT,
+                confidence FLOAT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(event_id, coin_id)
+            );
+        """)
+        await conn.close()
+        # Sync assets in background
+        asyncio.create_task(_sync_assets_background())
+        print("[Collective] Asset tables ready, syncing top 100 tokens...")
+    except Exception as e:
+        print(f"[Collective] WARNING: Asset sync failed: {e}")
+
+
+async def _sync_assets_background():
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://api.coingecko.com/api/v3/coins/markets",
+                params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1},
+                timeout=15
+            )
+            coins = resp.json()
+        conn = await get_db_conn()
+        for coin in coins:
+            await conn.execute("""
+                INSERT INTO assets (coin_id, symbol, name, sector, market_cap_rank, market_cap_usd, current_price_usd, price_change_24h, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                ON CONFLICT (coin_id) DO UPDATE SET
+                    market_cap_rank=EXCLUDED.market_cap_rank,
+                    market_cap_usd=EXCLUDED.market_cap_usd,
+                    current_price_usd=EXCLUDED.current_price_usd,
+                    price_change_24h=EXCLUDED.price_change_24h,
+                    updated_at=NOW()
+            """,
+                coin["id"], coin["symbol"].upper(), coin["name"],
+                "other", coin.get("market_cap_rank"),
+                float(coin.get("market_cap") or 0),
+                float(coin.get("current_price") or 0),
+                float(coin.get("price_change_percentage_24h") or 0)
+            )
+        await conn.close()
+        print(f"[Collective] Synced {len(coins)} assets from CoinGecko")
+    except Exception as e:
+        print(f"[Collective] Asset sync error: {e}")
+
+
+@app.get("/assets")
+async def get_assets(sector: Optional[str] = None):
+    """Get top 100 tokens, optionally filtered by sector."""
+    try:
+        conn = await get_db_conn()
+        if sector:
+            rows = await conn.fetch(
+                "SELECT * FROM assets WHERE sector = $1 ORDER BY market_cap_rank ASC", sector)
+        else:
+            rows = await conn.fetch("SELECT * FROM assets ORDER BY market_cap_rank ASC")
+        await conn.close()
+        return {"status": "ok", "count": len(rows), "assets": [dict(r) for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/portfolio-impact/{event_id}")
+async def portfolio_impact(event_id: str):
+    """
+    Run portfolio impact analysis for a corpus event against top 100 tokens.
+    Returns which assets are most affected and how.
+    """
+    import openai as _openai
+
+    # Get the event from corpus
+    try:
+        conn = await get_db_conn()
+        event = await conn.fetchrow("SELECT * FROM corpus WHERE event_id = $1", event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+
+        # Check if already analyzed
+        existing = await conn.fetch(
+            "SELECT * FROM portfolio_impacts WHERE event_id = $1 ORDER BY confidence DESC", event_id)
+        if existing:
+            await conn.close()
+            return {
+                "status": "ok",
+                "event_id": event_id,
+                "cached": True,
+                "impacts": [dict(r) for r in existing]
+            }
+
+        # Get top 100 assets
+        assets = await conn.fetch("SELECT coin_id, symbol, name, sector, current_price_usd, price_change_24h FROM assets ORDER BY market_cap_rank ASC LIMIT 100")
+        await conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not assets:
+        raise HTTPException(status_code=404, detail="No assets found — run /assets sync first")
+
+    # Build asset list for prompt
+    asset_list = "\n".join([
+        f"{i+1}. {dict(a)['symbol']} ({dict(a)['name']}) — sector: {dict(a)['sector']}, 24h: {dict(a)['price_change_24h']:+.1f}%"
+        for i, a in enumerate(assets)
+    ])
+
+    event_dict = dict(event)
+    intel = event_dict.get("intelligence", {})
+    if isinstance(intel, str):
+        intel = json.loads(intel)
+
+    prompt = f"""You are a crypto portfolio impact analyst at Arca, a digital assets investment firm.
+
+Analyze this market event and identify which of the top 100 tokens by market cap are most affected.
+
+EVENT: {event_dict['description']}
+DOMAIN: {event_dict['domain']}
+MARKET REGIME: {intel.get('market_regime', 'unknown')}
+RECOMMENDATION: {intel.get('recommendation', '')}
+
+TOP 100 TOKENS:
+{asset_list}
+
+Identify the 10-15 most meaningfully impacted tokens. For each return:
+- impact_direction: "positive" | "negative" | "neutral"  
+- impact_severity: "high" | "medium" | "low"
+- rationale: one sentence explaining why
+
+Return JSON:
+{{
+    "impacts": [
+        {{
+            "coin_id": "bitcoin",
+            "symbol": "BTC",
+            "name": "Bitcoin",
+            "impact_direction": "positive|negative|neutral",
+            "impact_severity": "high|medium|low",
+            "rationale": "...",
+            "confidence": 0.X
+        }}
+    ],
+    "summary": "One paragraph synthesis of overall portfolio impact"
+}}"""
+
+    try:
+        client = _openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.2
+        )
+        result = json.loads(response.choices[0].message.content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis error: {e}")
+
+    # Persist impacts
+    try:
+        conn = await get_db_conn()
+        for impact in result.get("impacts", []):
+            await conn.execute("""
+                INSERT INTO portfolio_impacts
+                    (event_id, coin_id, symbol, name, impact_direction, impact_severity, rationale, confidence)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (event_id, coin_id) DO NOTHING
+            """,
+                event_id,
+                impact.get("coin_id", ""),
+                impact.get("symbol", ""),
+                impact.get("name", ""),
+                impact.get("impact_direction", "neutral"),
+                impact.get("impact_severity", "low"),
+                impact.get("rationale", ""),
+                float(impact.get("confidence", 0.5))
+            )
+        await conn.close()
+    except Exception as e:
+        print(f"[Collective] WARNING: Impact persist failed: {e}")
+
+    return {
+        "status": "ok",
+        "event_id": event_id,
+        "cached": False,
+        "summary": result.get("summary", ""),
+        "impacts": result.get("impacts", [])
+    }
