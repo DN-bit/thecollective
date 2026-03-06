@@ -342,3 +342,17 @@ Return JSON:
         raise HTTPException(status_code=500, detail=f"Synthesis error: {e}")
 
     return {"status": "ok", "brief": brief, "source_entries": len(entries), "generated_at": datetime.now().isoformat()}
+    @app.get("/debug")
+async def debug():
+    import openai, os
+    try:
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Say hello in JSON: {\"message\": \"hello\"}"}],
+            response_format={"type": "json_object"},
+            max_tokens=50
+        )
+        return {"status": "ok", "response": response.choices[0].message.content}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "type": type(e).__name__}
