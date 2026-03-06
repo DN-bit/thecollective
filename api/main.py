@@ -394,7 +394,7 @@ async def sync_assets_on_startup():
         """)
         await conn.close()
         # Sync assets in background
-        asyncio.create_task(_sync_assets_background())
+        await _sync_assets_background()
         print("[Collective] Asset tables ready, syncing top 100 tokens...")
     except Exception as e:
         print(f"[Collective] WARNING: Asset sync failed: {e}")
