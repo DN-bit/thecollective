@@ -8,6 +8,7 @@ import sys
 from datetime import datetime
 from typing import Optional, Dict, Any
 
+import anthropic
 import asyncpg
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -205,7 +206,7 @@ class MacroNode(SpecialistNode):
             system_prompt="""You are MacroNode, a specialist in crypto macro intelligence.
 Analyze geopolitical events, Fed policy, institutional flows, and market structure.
 Always return structured JSON with chain-of-thought reasoning, scenarios, and citations.""",
-            model="gpt-4o-mini"
+            model="claude-sonnet-4-5"
         )
 
     def _format_prompt(self, event: IntelligenceEvent) -> str:
@@ -366,7 +367,7 @@ async def stats():
 
 @app.get("/digest")
 async def get_digest(hours: int = 24, domain: Optional[str] = None):
-    import openai
+    # anthropic already imported at top
 
     try:
         conn = await get_db_conn()
@@ -420,14 +421,19 @@ Return JSON:
 }}"""
 
     try:
-        client = openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": synthesis_prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.2
+        client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        response = await client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=2000,
+            system="You are a senior analyst at Arca. Return only valid JSON, no markdown fences.",
+            messages=[{"role": "user", "content": synthesis_prompt}]
         )
-        brief = json.loads(response.choices[0].message.content)
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        brief = json.loads(raw.strip())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Synthesis error: {e}")
 
@@ -508,7 +514,7 @@ TOKEN_RISK_PROFILES = {
 @app.post("/portfolio-impact/{event_id}")
 async def portfolio_impact(event_id: str, force_refresh: bool = False):
     """Run deep portfolio impact analysis against top 100 tokens."""
-    import openai as _openai
+    # anthropic already imported at top
 
     try:
         conn = await get_db_conn()
@@ -622,14 +628,19 @@ Return JSON:
 }}"""
 
     try:
-        client = _openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.2
+        client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        response = await client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=4000,
+            system="You are a senior portfolio analyst at Arca, a digital assets investment firm. Return only valid JSON, no markdown fences.",
+            messages=[{"role": "user", "content": prompt}]
         )
-        result = json.loads(response.choices[0].message.content)
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {e}")
 
@@ -674,15 +685,13 @@ Return JSON:
 
 @app.get("/debug")
 async def debug():
-    import openai, os
     try:
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "Say hello in JSON: {\"message\": \"hello\"}"}],
-            response_format={"type": "json_object"},
-            max_tokens=50
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=50,
+            messages=[{"role": "user", "content": "Return this JSON: {\"message\": \"hello from The Collective\"}"}]
         )
-        return {"status": "ok", "response": response.choices[0].message.content}
+        return {"status": "ok", "response": response.content[0].text}
     except Exception as e:
         return {"status": "error", "error": str(e), "type": type(e).__name__}
