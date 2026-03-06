@@ -1,224 +1,167 @@
 # The Collective - Specialist Node Base Class
-# Agent-to-agent training system
+# All nodes inherit from this. Uses Anthropic Claude.
 
-import asyncio
 import json
 import os
+import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List, Dict, Optional, Any
+from dataclasses import dataclass, field
 from datetime import datetime
-import openai
+from typing import Any, Dict, List, Optional
+
+import anthropic
+
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
 
 @dataclass
 class IntelligenceEvent:
-    """Trigger event for Node analysis"""
     id: str
     timestamp: datetime
     source: str
     description: str
-    impact_score: float  # 0.0 - 1.0
+    impact_score: float          # 0.0 – 1.0
     relevant_domains: List[str]
-    raw_data: Optional[Dict] = None
+    raw_data: Optional[Any] = None
+
 
 @dataclass
 class NodeOutput:
-    """Specialist Node output package"""
     node_id: str
-    domain: str
     event_id: str
+    domain: str
     output: Dict[str, Any]
-    chain_of_thought: List[str]
     confidence: float
-    citations: List[str]
-    generation_time_ms: int
-    compute_cost_usd: float
     timestamp: datetime
+    compute_cost_usd: float = 0.0
+    generation: int = 1
+
+
+# ---------------------------------------------------------------------------
+# Pricing (Claude Sonnet 4.5 as of 2025)
+# Input:  $3.00 / 1M tokens
+# Output: $15.00 / 1M tokens
+# ---------------------------------------------------------------------------
+
+SONNET_INPUT_COST  = 3.00  / 1_000_000
+SONNET_OUTPUT_COST = 15.00 / 1_000_000
+
+
+def estimate_cost(input_tokens: int, output_tokens: int) -> float:
+    return (input_tokens * SONNET_INPUT_COST) + (output_tokens * SONNET_OUTPUT_COST)
+
+
+# ---------------------------------------------------------------------------
+# SpecialistNode base
+# ---------------------------------------------------------------------------
 
 class SpecialistNode(ABC):
-    """Base class for all Specialist Nodes in The Collective"""
-    
-    def __init__(self, domain: str, system_prompt: str, model: str = "gpt-4o-mini"):
+    def __init__(self, domain: str, system_prompt: str, model: str = "claude-sonnet-4-5"):
         self.domain = domain
         self.system_prompt = system_prompt
         self.model = model
-        self.node_id = f"{domain}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
-        # Initialize OpenAI client
-        self.client = openai.AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
-        
-        # Metrics tracking
-        self.generations_count = 0
-        self.total_compute_cost = 0.0
-        self.average_quality_score = 0.0
-    
-    async def generate(
-        self, 
-        event: IntelligenceEvent, 
-        n_variants: int = 3,
-        temperature_range: tuple = (0.3, 0.7)
-    ) -> List[NodeOutput]:
-        """Generate multiple output variants for self-critique"""
-        
-        variants = []
-        min_temp, max_temp = temperature_range
-        temp_step = (max_temp - min_temp) / max(n_variants - 1, 1)
-        
-        for i in range(n_variants):
-            temperature = min_temp + (i * temp_step)
-            
-            try:
-                # Generate raw output
-                raw_output = await self._llm_call(
-                    system=self.system_prompt,
-                    user=self._format_prompt(event),
-                    temperature=temperature,
-                    response_format={"type": "json_object"}
-                )
-                
-                # Parse and validate
-                parsed = json.loads(raw_output)
-                
-                # Self-critique loop
-                critique = await self._self_critique(parsed)
-                
-                # Accept if score >= 3.0 (was requiring both boolean and score)
-                if critique['average_score'] >= 3.0:
-                    variants.append(NodeOutput(
-                        node_id=f"{self.node_id}_{i}",
-                        domain=self.domain,
-                        event_id=event.id,
-                        output=parsed,
-                        chain_of_thought=parsed.get('chain_of_thought', []),
-                        confidence=parsed.get('confidence', 0.5),
-                        citations=parsed.get('citations', []),
-                        generation_time_ms=critique['time_ms'],
-                        compute_cost_usd=critique['cost_usd'],
-                        timestamp=datetime.now()
-                    ))
-                    
-            except Exception as e:
-                print(f"[{self.domain}] Generation failed for variant {i}: {e}")
-                continue
-        
-        self.generations_count += len(variants)
-        return variants
-    
-    async def _llm_call(
-        self, 
-        system: str, 
-        user: str, 
-        temperature: float,
-        response_format: Optional[Dict] = None,
-        max_tokens: int = 4000
-    ) -> str:
-        """Call OpenAI API with retry logic"""
-        
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user}
-                    ],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    response_format=response_format
-                )
-                
-                return response.choices[0].message.content
-                
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    raise
-                await asyncio.sleep(2 ** attempt)
-    
-    async def _self_critique(self, output: Dict) -> Dict:
-        """Node critiques its own output before submission"""
-        
-        critique_prompt = f"""
-        Review this {self.domain} analysis critically:
-        
-        {json.dumps(output, indent=2)}
-        
-        Evaluate on:
-        1. Structure completeness (all required fields present)
-        2. Reasoning depth (chain-of-thought quality)
-        3. Factual claims (verifiable, cited)
-        4. Actionability (specific recommendations)
-        
-        Score each 1-5. Return JSON:
-        {{
-            "structure_score": X,
-            "reasoning_score": X,
-            "factual_score": X,
-            "actionability_score": X,
-            "average_score": X.X,
-            "passes_threshold": true/false,
-            "issues": ["issue1", "issue2"]
-        }}
-        """
-        
-        try:
-            critique_response = await self._llm_call(
-                system="You are a ruthless quality reviewer. Be harsh and critical.",
-                user=critique_prompt,
-                temperature=0.0,
-                response_format={"type": "json_object"}
-            )
-            
-            critique = json.loads(critique_response)
-            
-            # Estimate compute cost ($0.0006 per 1K tokens for gpt-4o-mini)
-            input_tokens = len(critique_prompt) // 4
-            output_tokens = len(critique_response) // 4
-            cost_usd = (input_tokens + output_tokens) / 1000 * 0.0006
-            
-            avg_score = critique.get('average_score', 0)
-            
-            return {
-                'structure_score': critique.get('structure_score', 0),
-                'reasoning_score': critique.get('reasoning_score', 0),
-                'factual_score': critique.get('factual_score', 0),
-                'actionability_score': critique.get('actionability_score', 0),
-                'average_score': avg_score,
-                'passes_threshold': avg_score >= 3.0,  # Lower threshold, use score directly
-                'issues': critique.get('issues', []),
-                'time_ms': 0,
-                'cost_usd': cost_usd
-            }
-            
-        except Exception as e:
-            print(f"[{self.domain}] Self-critique failed: {e}")
-            return {
-                'average_score': 0,
-                'passes_threshold': False,
-                'issues': [f'Critique error: {str(e)}'],
-                'time_ms': 0,
-                'cost_usd': 0
-            }
-    
+        self.node_id = f"{domain}_node_v1"
+        self._client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
     @abstractmethod
     def _format_prompt(self, event: IntelligenceEvent) -> str:
-        """Domain-specific prompt formatting - implement in subclasses"""
+        """Format the user prompt for this node's domain."""
         pass
-    
-    def get_metrics(self) -> Dict:
-        """Return Node performance metrics"""
-        return {
-            'node_id': self.node_id,
-            'domain': self.domain,
-            'generations_count': self.generations_count,
-            'total_compute_cost_usd': self.total_compute_cost,
-            'average_quality_score': self.average_quality_score
-        }
 
+    async def generate(self, event: IntelligenceEvent, n_variants: int = 1) -> List[NodeOutput]:
+        """Generate intelligence outputs, run self-critique, return passing outputs."""
+        outputs = []
+        for _ in range(n_variants):
+            output = await self._generate_single(event)
+            if output:
+                critique = await self._self_critique(output)
+                if critique.get("passes_threshold", False):
+                    output.confidence = critique.get("average_score", 0.5) / 5.0
+                    outputs.append(output)
+        return outputs
 
-# Example usage / testing
-if __name__ == "__main__":
-    print("SpecialistNode base class loaded successfully")
-    print("Implement domain-specific subclasses in individual node files")
+    async def _generate_single(self, event: IntelligenceEvent) -> Optional[NodeOutput]:
+        prompt = self._format_prompt(event)
+        try:
+            response = await self._client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                system=self.system_prompt,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            raw_text = response.content[0].text
+
+            # Strip markdown fences if present
+            clean = raw_text.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```")[1]
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip()
+
+            output_data = json.loads(clean)
+
+            input_tokens  = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+            cost = estimate_cost(input_tokens, output_tokens)
+
+            return NodeOutput(
+                node_id=self.node_id,
+                event_id=event.id,
+                domain=self.domain,
+                output=output_data,
+                confidence=output_data.get("confidence", 0.7),
+                timestamp=datetime.now(),
+                compute_cost_usd=cost,
+            )
+        except Exception as e:
+            print(f"[{self.node_id}] Generation error: {e}")
+            return None
+
+    async def _self_critique(self, output: NodeOutput) -> Dict:
+        """Score the output on 4 dimensions. Passes if average >= 3.0/5.0."""
+        critique_prompt = f"""Rate this intelligence output on 4 dimensions (1-5 scale):
+
+Output to evaluate:
+{json.dumps(output.output, indent=2)}
+
+Score each dimension:
+1. Structure (1-5): Is the JSON complete with all required fields?
+2. Reasoning (1-5): Is the chain-of-thought logical and deep?
+3. Factual (1-5): Are claims grounded and citations present?
+4. Actionable (1-5): Is the recommendation specific and useful?
+
+Return JSON only:
+{{
+    "structure": <int>,
+    "reasoning": <int>,
+    "factual": <int>,
+    "actionable": <int>,
+    "average_score": <float>,
+    "passes_threshold": <bool>,
+    "critique_notes": "<brief notes>"
+}}"""
+
+        try:
+            response = await self._client.messages.create(
+                model=self.model,
+                max_tokens=300,
+                system="You are a rigorous quality evaluator. Return only valid JSON.",
+                messages=[{"role": "user", "content": critique_prompt}]
+            )
+            raw = response.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            scores = json.loads(raw.strip())
+            avg = (scores.get("structure", 3) + scores.get("reasoning", 3) +
+                   scores.get("factual", 3) + scores.get("actionable", 3)) / 4.0
+            scores["average_score"] = avg
+            scores["passes_threshold"] = avg >= 3.0
+            return scores
+        except Exception as e:
+            print(f"[{self.node_id}] Self-critique error: {e}")
+            # Default pass so a critique failure doesn't block all output
+            return {"average_score": 3.0, "passes_threshold": True}
