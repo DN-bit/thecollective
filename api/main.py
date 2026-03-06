@@ -106,12 +106,21 @@ async def init_db():
 async def sync_assets_from_coingecko():
     """Fetch top 100 tokens from CoinGecko and upsert into assets table."""
     import httpx as _httpx
+
+    api_key = os.getenv("COINGECKO_API_KEY", "")
+    headers = {"Accept": "application/json"}
+    params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1}
+
+    # Demo key uses x-cg-demo-api-key header; Pro key uses x-cg-pro-api-key
+    if api_key:
+        headers["x-cg-demo-api-key"] = api_key
+
     async with _httpx.AsyncClient() as client:
         resp = await client.get(
             "https://api.coingecko.com/api/v3/coins/markets",
-            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1},
+            params=params,
             timeout=30,
-            headers={"Accept": "application/json"}
+            headers=headers
         )
         coins = resp.json()
 
@@ -451,9 +460,54 @@ async def manual_asset_sync():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Token risk profiles — fundamental context that enriches impact analysis
+TOKEN_RISK_PROFILES = {
+    "bitcoin":           "Digital gold narrative, institutional safe-haven, highly correlated to macro risk-off. Regulatory clarity generally positive. Mining energy exposure.",
+    "ethereum":          "Smart contract platform, ETF approved, staking yield, highly correlated to DeFi/NFT sectors. SEC scrutiny on staking. Leading L1.",
+    "tether":            "Largest stablecoin, systemic liquidity provider, regulatory target for reserve transparency. De-peg risk in stress scenarios.",
+    "binancecoin":       "Native token of Binance exchange and BNB Chain. Direct legal exposure to Binance regulatory actions globally. CZ DOJ conviction overhang.",
+    "solana":            "High-throughput L1, FTX collapse association still present, strong developer momentum. Centralization concerns, validator concentration.",
+    "ripple":            "XRP — long-running SEC lawsuit partially resolved. Institutional cross-border payments focus. Regulatory clarity improving but not complete.",
+    "usd-coin":          "Circle-issued stablecoin, regulated, transparent reserves. Benefits from regulatory clarity. Competes with USDT.",
+    "staked-ether":      "Lido staked ETH, liquid staking derivative. Smart contract risk, slashing risk, ETH correlation. Dominant LST by TVL.",
+    "dogecoin":          "Meme coin, retail sentiment driven, Elon Musk correlation. High beta to risk-on/risk-off. No fundamental utility.",
+    "cardano":           "Academic PoS L1, slow development pace, strong community. Limited DeFi ecosystem. Low regulatory risk profile.",
+    "tron":              "High-throughput L1, dominant in USDT transfers, Justin Sun legal exposure (SEC fraud charges). Centralized.",
+    "avalanche-2":       "EVM-compatible L1, subnet architecture, institutional focus. Competing with ETH L2s. Strong enterprise partnerships.",
+    "shiba-inu":         "Meme coin ecosystem, SHIB army retail base, Shibarium L2. Pure sentiment play, no fundamental value drivers.",
+    "chainlink":         "Decentralized oracle network, critical DeFi infrastructure. Benefits from DeFi growth. Low regulatory risk, high utility.",
+    "polkadot":          "Multi-chain interoperability, parachain auctions, Web3 Foundation. Underperformed vs peers, ecosystem fragmentation risk.",
+    "bitcoin-cash":      "BTC fork, P2P payments focus, low institutional interest. Follows BTC directionally with higher volatility.",
+    "uniswap":           "Leading DEX, UNI governance token, fee switch debate ongoing. SEC scrutiny on DeFi. High regulatory risk.",
+    "litecoin":          "BTC silver, payments focus, MimbleWimble privacy upgrade. Low institutional interest, follows BTC.",
+    "near":              "Sharded L1, developer-friendly, AI blockchain narrative. Strong VC backing, chain abstraction focus.",
+    "internet-computer": "Dfinity ICP, on-chain computation, controversial launch history. Niche use case, limited DeFi.",
+    "dai":               "Decentralized stablecoin (MakerDAO/Sky), crypto-collateralized. RWA exposure growing. Regulatory uncertainty on decentralized stables.",
+    "ethereum-classic":  "Original ETH chain post-DAO fork. PoW, low developer activity, speculative.",
+    "monero":            "Privacy coin, regulatory target globally. Delistings ongoing. High regulatory risk.",
+    "stellar":           "XLM, cross-border payments, Ripple competitor. SDF-controlled supply, institutional partnerships.",
+    "aave":              "Leading DeFi lending protocol, multi-chain, GHO stablecoin. Regulatory risk on DeFi lending. High TVL.",
+    "maker":             "MKR/DAI system, RWA collateral growing, Sky rebrand. Decentralized governance, regulatory uncertainty.",
+    "cosmos":            "ATOM, IBC interoperability hub, modular blockchain ecosystem. Fragmented value accrual.",
+    "filecoin":          "Decentralized storage, FIL token. Long development cycles, storage market competition.",
+    "hedera-hashgraph":  "Enterprise DLT, HBAR, governed by Hedera council (Google, IBM etc). Centralized but enterprise-grade.",
+    "aptos":             "Move-based L1, a16z backed, high TPS. Competing with Sui. Growing DeFi ecosystem.",
+    "sui":               "Move-based L1, Mysten Labs, fast finality. Strong gaming and consumer app focus.",
+    "hyperliquid":       "On-chain perps DEX, HYPE token, high TVL. Fully on-chain order book. Regulatory risk on derivatives.",
+    "pepe":              "Meme coin, pure sentiment, no utility. Extreme volatility. Retail speculation only.",
+    "render-token":      "Decentralized GPU rendering, AI/compute narrative. Benefits from AI demand for GPU.",
+    "fetch-ai":          "AI agent network, ASI Alliance merger with OCEAN and AGIX. AI x crypto narrative.",
+    "bittensor":         "Decentralized ML training network, TAO token. AI x crypto narrative, high valuation.",
+    "arbitrum":          "Leading ETH L2, ARB governance token. Benefits from ETH ecosystem growth. Fee compression risk.",
+    "optimism":          "ETH L2, OP Stack, Superchain vision. Strong ecosystem, retroactive funding model.",
+    "injective-protocol":"DeFi-native L1, INJ, derivatives and RWA focus. High performance, growing ecosystem.",
+    "mantle":            "ETH L2, BitDAO treasury backing. Enterprise focus. Competing in crowded L2 market.",
+}
+
+
 @app.post("/portfolio-impact/{event_id}")
-async def portfolio_impact(event_id: str):
-    """Run portfolio impact analysis against top 100 tokens."""
+async def portfolio_impact(event_id: str, force_refresh: bool = False):
+    """Run deep portfolio impact analysis against top 100 tokens."""
     import openai as _openai
 
     try:
@@ -462,14 +516,16 @@ async def portfolio_impact(event_id: str):
         if not event:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
-        existing = await conn.fetch(
-            "SELECT * FROM portfolio_impacts WHERE event_id = $1 ORDER BY confidence DESC", event_id)
-        if existing:
-            await conn.close()
-            return {"status": "ok", "event_id": event_id, "cached": True, "impacts": [dict(r) for r in existing]}
+        # Return cached unless force_refresh
+        if not force_refresh:
+            existing = await conn.fetch(
+                "SELECT * FROM portfolio_impacts WHERE event_id = $1 ORDER BY confidence DESC", event_id)
+            if existing:
+                await conn.close()
+                return {"status": "ok", "event_id": event_id, "cached": True, "impacts": [dict(r) for r in existing]}
 
         assets = await conn.fetch(
-            "SELECT coin_id, symbol, name, sector, current_price_usd, price_change_24h FROM assets ORDER BY market_cap_rank ASC LIMIT 100")
+            "SELECT coin_id, symbol, name, sector, current_price_usd, price_change_24h, market_cap_rank FROM assets ORDER BY market_cap_rank ASC LIMIT 100")
         await conn.close()
     except HTTPException:
         raise
@@ -479,47 +535,90 @@ async def portfolio_impact(event_id: str):
     if not assets:
         raise HTTPException(status_code=404, detail="No assets found — run /assets/sync first")
 
-    asset_list = "\n".join([
-        f"{i+1}. {dict(a)['symbol']} ({dict(a)['name']}) — sector: {dict(a)['sector']}, 24h: {dict(a)['price_change_24h']:+.1f}%"
-        for i, a in enumerate(assets)
-    ])
+    # Build enriched asset list with risk profiles
+    asset_lines = []
+    for i, a in enumerate(assets):
+        ad = dict(a)
+        profile = TOKEN_RISK_PROFILES.get(ad['coin_id'], "")
+        profile_str = f" | PROFILE: {profile}" if profile else ""
+        asset_lines.append(
+            f"{i+1}. {ad['symbol']} ({ad['name']}) — sector: {ad['sector']}, "
+            f"rank: #{ad['market_cap_rank']}, 24h: {ad['price_change_24h']:+.1f}%, "
+            f"price: ${ad['current_price_usd']:,.2f}{profile_str}"
+        )
+    asset_list = "\n".join(asset_lines)
 
     event_dict = dict(event)
     intel = event_dict.get("intelligence", {})
     if isinstance(intel, str):
         intel = json.loads(intel)
 
-    prompt = f"""You are a crypto portfolio impact analyst at Arca, a digital assets investment firm.
+    # Build full intelligence context
+    cot = intel.get("chain_of_thought", [])
+    scenarios = intel.get("scenarios", [])
+    cot_str = "\n".join([f"  {i+1}. {s}" for i, s in enumerate(cot)]) if cot else "  Not available"
+    scenarios_str = "\n".join([
+        f"  - {s.get('outcome','')}: {s.get('probability',0)*100:.0f}% probability — {s.get('rationale','')}"
+        for s in scenarios
+    ]) if scenarios else "  Not available"
 
-Analyze this market event and identify which of the top 100 tokens by market cap are most affected.
+    prompt = f"""You are a senior portfolio analyst at Arca, a digital assets investment firm and registered investment advisor.
 
-EVENT: {event_dict['description']}
-DOMAIN: {event_dict['domain']}
-MARKET REGIME: {intel.get('market_regime', 'unknown')}
-RECOMMENDATION: {intel.get('recommendation', '')}
+Your job is to produce a rigorous, specific assessment of how a market event impacts each of the top 100 crypto tokens.
+Be precise. Cite specific mechanisms — legal exposure, liquidity contagion, narrative correlation, protocol dependency, regulatory classification risk.
+Do NOT give generic market sentiment explanations. Every rationale must be token-specific and mechanistically grounded.
 
-TOP 100 TOKENS:
+═══ MARKET EVENT ═══
+Description: {event_dict['description']}
+Domain: {event_dict['domain']}
+Impact Score: {event_dict['impact']}
+Market Regime: {intel.get('market_regime', 'unknown')}
+Confidence: {event_dict['confidence']}
+
+═══ MACRONODE ANALYSIS ═══
+Chain of Thought:
+{cot_str}
+
+Scenarios:
+{scenarios_str}
+
+Recommendation: {intel.get('recommendation', 'N/A')}
+Key Metrics: {json.dumps(intel.get('key_metrics', {}), indent=2)}
+
+═══ TOP 100 TOKENS ═══
 {asset_list}
 
-Identify the 10-15 most meaningfully impacted tokens. For each return:
-- impact_direction: "positive" | "negative" | "neutral"
-- impact_severity: "high" | "medium" | "low"
-- rationale: one sentence explaining why
+═══ INSTRUCTIONS ═══
+1. Identify the 12-18 tokens most meaningfully impacted by this specific event
+2. For each token provide:
+   - impact_direction: "positive" | "negative" | "neutral"
+   - impact_severity: "high" | "medium" | "low"  
+   - mechanism: the specific channel through which this event affects this token
+     (e.g. "direct legal exposure", "liquidity contagion via BNB Chain DeFi", 
+     "safe haven rotation", "regulatory classification risk as security", 
+     "mining revenue impact", "stablecoin de-peg risk")
+   - rationale: 2-3 sentences. Be specific. Reference the token's actual risk profile,
+     not just general market sentiment. Mention price levels or on-chain metrics if relevant.
+   - confidence: 0.0-1.0
+
+3. Write a 3-4 sentence executive summary suitable for an LP update call.
+   Reference specific tokens, mechanisms, and Arca's positioning context.
 
 Return JSON:
 {{
     "impacts": [
         {{
-            "coin_id": "bitcoin",
-            "symbol": "BTC",
-            "name": "Bitcoin",
-            "impact_direction": "positive|negative|neutral",
-            "impact_severity": "high|medium|low",
-            "rationale": "...",
-            "confidence": 0.X
+            "coin_id": "binancecoin",
+            "symbol": "BNB",
+            "name": "BNB",
+            "impact_direction": "negative",
+            "impact_severity": "high",
+            "mechanism": "direct legal exposure",
+            "rationale": "BNB faces direct downside from any Binance regulatory action given its utility is tightly coupled to the exchange's ecosystem. CZ's DOJ conviction creates ongoing headline risk. BNB Chain DeFi TVL (~$4B) could see outflows if exchange solvency concerns resurface.",
+            "confidence": 0.88
         }}
     ],
-    "summary": "One paragraph synthesis of overall portfolio impact"
+    "summary": "Executive summary for LP communications..."
 }}"""
 
     try:
@@ -536,12 +635,19 @@ Return JSON:
 
     try:
         conn = await get_db_conn()
+        # Add mechanism column if it doesn't exist yet
+        await conn.execute("ALTER TABLE portfolio_impacts ADD COLUMN IF NOT EXISTS mechanism TEXT")
         for impact in result.get("impacts", []):
             await conn.execute("""
                 INSERT INTO portfolio_impacts
-                    (event_id, coin_id, symbol, name, impact_direction, impact_severity, rationale, confidence)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (event_id, coin_id) DO NOTHING
+                    (event_id, coin_id, symbol, name, impact_direction, impact_severity, mechanism, rationale, confidence)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (event_id, coin_id) DO UPDATE SET
+                    impact_direction = EXCLUDED.impact_direction,
+                    impact_severity = EXCLUDED.impact_severity,
+                    mechanism = EXCLUDED.mechanism,
+                    rationale = EXCLUDED.rationale,
+                    confidence = EXCLUDED.confidence
             """,
                 event_id,
                 impact.get("coin_id", ""),
@@ -549,6 +655,7 @@ Return JSON:
                 impact.get("name", ""),
                 impact.get("impact_direction", "neutral"),
                 impact.get("impact_severity", "low"),
+                impact.get("mechanism", ""),
                 impact.get("rationale", ""),
                 float(impact.get("confidence", 0.5))
             )
