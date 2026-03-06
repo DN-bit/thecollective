@@ -1,58 +1,45 @@
-async def judge(event_id: str, evaluation: JudgeEvaluation):
-   """Arca judges submit evaluations here"""
-   corpus_path = "/tmp/corpus.jsonl"
+from fastapi import FastAPI
+from pydantic import BaseModel
+import json
+import os
+from datetime import datetime
 
-   try:
-       # Read corpus
-       entries = []
-       with open(corpus_path, 'r') as f:
-           for line in f:
-               entries.append(json.loads(line))
+app = FastAPI()
 
-       # Find and update entry
-       for entry in entries:
-           if entry["event_id"] == event_id:
-               entry["quality_score"] = evaluation.score
-               entry["judged"] = True
-               entry["judge_feedback"] = evaluation.feedback
-               entry["accepted"] = evaluation.accepted
+class EventRequest(BaseModel):
+   description: str
+   domain: str = "macro"
+   impact: float = 0.5
 
-               # Rewrite corpus
-               with open(corpus_path, 'w') as f:
-                   for e in entries:
-                       f.write(json.dumps(e) + '\n')
+@app.get("/")
+def root():
+   return {"name": "The Collective", "version": "0.3.0"}
 
-               return {
-                   "status": "judged",
-                   "event_id": event_id,
-                   "score": evaluation.score,
-                   "accepted": evaluation.accepted
-               }
+@app.get("/health")
+def health():
+   return {"status": "healthy"}
 
-       return {"status": "error", "error": "Event not found"}
+@app.get("/stats")
+def stats():
+   return {"corpus_size": 0, "acceptance_rate": 0.0, "avg_quality": 0.0}
 
-   except Exception as e:
-       return {"status": "error", "error": str(e)}
+@app.post("/generate")
+def generate(request: EventRequest):
+   return {
+       "status": "generated",
+       "event_id": "evt_001",
+       "description": request.description,
+       "intelligence": {
+           "market_regime": "bull",
+           "scenarios": [
+               {"outcome": "Bull", "probability": 0.6},
+               {"outcome": "Base", "probability": 0.3},
+               {"outcome": "Bear", "probability": 0.1}
+           ],
+           "recommendation": "Accumulate on dips"
+       }
+   }
 
 @app.get("/pending")
 def pending():
-   """Get intelligence waiting for judge evaluation"""
-   corpus_path = "/tmp/corpus.jsonl"
-   pending_items = []
-
-   try:
-       if os.path.exists(corpus_path):
-           with open(corpus_path, 'r') as f:
-               for line in f:
-                   entry = json.loads(line)
-                   if not entry.get("judged", False):
-                       pending_items.append({
-                           "event_id": entry["event_id"],
-                           "domain": entry["domain"],
-                           "description": entry["intelligence"].get("input_event", "Unknown"),
-                           "confidence": entry["confidence"]
-                       })
-   except:
-       pass
-
-   return {"pending": pending_items, "count": len(pending_items)}
+   return {"pending": [], "count": 0}
