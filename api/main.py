@@ -342,7 +342,9 @@ Return JSON:
         raise HTTPException(status_code=500, detail=f"Synthesis error: {e}")
 
     return {"status": "ok", "brief": brief, "source_entries": len(entries), "generated_at": datetime.now().isoformat()}
-    @app.get("/debug")
+
+
+@app.get("/debug")
 async def debug():
     import openai, os
     try:
