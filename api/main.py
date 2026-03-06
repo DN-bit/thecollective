@@ -1,6 +1,7 @@
 # The Collective - Central API
 # FastAPI application - Central Mind HTTP interface
 
+import asyncio
 import json
 import os
 import sys
@@ -35,14 +36,13 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Database - asyncpg (async, no binary compilation issues)
+# Database
 # ---------------------------------------------------------------------------
 
 async def get_db_conn():
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable not set")
-    # Render sometimes gives postgres:// — asyncpg needs postgresql://
     database_url = database_url.replace("postgres://", "postgresql://")
     return await asyncpg.connect(database_url)
 
@@ -73,18 +73,99 @@ async def init_db():
                 compute_cost_usd FLOAT,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
+            CREATE TABLE IF NOT EXISTS assets (
+                id SERIAL PRIMARY KEY,
+                coin_id TEXT UNIQUE NOT NULL,
+                symbol TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sector TEXT,
+                market_cap_rank INTEGER,
+                market_cap_usd FLOAT,
+                current_price_usd FLOAT,
+                price_change_24h FLOAT,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS portfolio_impacts (
+                id SERIAL PRIMARY KEY,
+                event_id TEXT NOT NULL,
+                coin_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                name TEXT NOT NULL,
+                impact_direction TEXT,
+                impact_severity TEXT,
+                rationale TEXT,
+                confidence FLOAT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(event_id, coin_id)
+            );
         """)
     finally:
         await conn.close()
 
 
+async def sync_assets_from_coingecko():
+    """Fetch top 100 tokens from CoinGecko and upsert into assets table."""
+    import httpx as _httpx
+    async with _httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1},
+            timeout=30,
+            headers={"Accept": "application/json"}
+        )
+        coins = resp.json()
+
+    # CoinGecko rate limit returns a dict, not a list
+    if not isinstance(coins, list):
+        raise ValueError(f"CoinGecko returned unexpected response: {coins}")
+
+    conn = await get_db_conn()
+    try:
+        count = 0
+        for coin in coins:
+            if not isinstance(coin, dict):
+                continue
+            await conn.execute("""
+                INSERT INTO assets (coin_id, symbol, name, sector, market_cap_rank, market_cap_usd, current_price_usd, price_change_24h, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                ON CONFLICT (coin_id) DO UPDATE SET
+                    market_cap_rank = EXCLUDED.market_cap_rank,
+                    market_cap_usd = EXCLUDED.market_cap_usd,
+                    current_price_usd = EXCLUDED.current_price_usd,
+                    price_change_24h = EXCLUDED.price_change_24h,
+                    updated_at = NOW()
+            """,
+                coin["id"],
+                coin["symbol"].upper(),
+                coin["name"],
+                "other",
+                coin.get("market_cap_rank"),
+                float(coin.get("market_cap") or 0),
+                float(coin.get("current_price") or 0),
+                float(coin.get("price_change_percentage_24h") or 0)
+            )
+            count += 1
+    finally:
+        await conn.close()
+
+    print(f"[Collective] Synced {count} assets from CoinGecko")
+    return count
+
+
 @app.on_event("startup")
 async def startup():
+    # Init all DB tables
     try:
         await init_db()
         print("[Collective] Database initialized successfully")
     except Exception as e:
         print(f"[Collective] WARNING: DB init failed: {e}")
+
+    # Sync top 100 tokens — await directly so it completes before first request
+    try:
+        await sync_assets_from_coingecko()
+    except Exception as e:
+        print(f"[Collective] WARNING: CoinGecko sync failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +186,7 @@ class JudgeRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# MacroNode (inline until agents/ folder is built out)
+# MacroNode
 # ---------------------------------------------------------------------------
 
 class MacroNode(SpecialistNode):
@@ -344,96 +425,6 @@ Return JSON:
     return {"status": "ok", "brief": brief, "source_entries": len(entries), "generated_at": datetime.now().isoformat()}
 
 
-@app.get("/debug")
-async def debug():
-    import openai, os
-    try:
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "Say hello in JSON: {\"message\": \"hello\"}"}],
-            response_format={"type": "json_object"},
-            max_tokens=50
-        )
-        return {"status": "ok", "response": response.choices[0].message.content}
-    except Exception as e:
-        return {"status": "error", "error": str(e), "type": type(e).__name__}
-
-@app.on_event("startup")
-async def sync_assets_on_startup():
-    """Sync top 100 assets from CoinGecko on startup."""
-    try:
-        conn = await get_db_conn()
-        # Create tables if needed
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS assets (
-                id SERIAL PRIMARY KEY,
-                coin_id TEXT UNIQUE NOT NULL,
-                symbol TEXT NOT NULL,
-                name TEXT NOT NULL,
-                sector TEXT,
-                market_cap_rank INTEGER,
-                market_cap_usd FLOAT,
-                current_price_usd FLOAT,
-                price_change_24h FLOAT,
-                updated_at TIMESTAMPTZ DEFAULT NOW()
-            );
-            CREATE TABLE IF NOT EXISTS portfolio_impacts (
-                id SERIAL PRIMARY KEY,
-                event_id TEXT NOT NULL,
-                coin_id TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                name TEXT NOT NULL,
-                impact_direction TEXT,
-                impact_severity TEXT,
-                rationale TEXT,
-                confidence FLOAT,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                UNIQUE(event_id, coin_id)
-            );
-        """)
-        await conn.close()
-        # Sync assets in background
-        await _sync_assets_background()
-        print("[Collective] Asset tables ready, syncing top 100 tokens...")
-    except Exception as e:
-        print(f"[Collective] WARNING: Asset sync failed: {e}")
-
-
-async def _sync_assets_background():
-    try:
-        import httpx as _httpx
-        async with _httpx.AsyncClient() as client:
-            resp = await client.get(
-                "https://api.coingecko.com/api/v3/coins/markets",
-                params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1},
-                timeout=15
-            )
-            coins = resp.json()
-        conn = await get_db_conn()
-        for coin in coins:
-            await conn.execute("""
-                INSERT INTO assets (coin_id, symbol, name, sector, market_cap_rank, market_cap_usd, current_price_usd, price_change_24h, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-                ON CONFLICT (coin_id) DO UPDATE SET
-                    market_cap_rank=EXCLUDED.market_cap_rank,
-                    market_cap_usd=EXCLUDED.market_cap_usd,
-                    current_price_usd=EXCLUDED.current_price_usd,
-                    price_change_24h=EXCLUDED.price_change_24h,
-                    updated_at=NOW()
-            """,
-                coin["id"], coin["symbol"].upper(), coin["name"],
-                "other", coin.get("market_cap_rank"),
-                float(coin.get("market_cap") or 0),
-                float(coin.get("current_price") or 0),
-                float(coin.get("price_change_percentage_24h") or 0)
-            )
-        await conn.close()
-        print(f"[Collective] Synced {len(coins)} assets from CoinGecko")
-    except Exception as e:
-        print(f"[Collective] Asset sync error: {e}")
-
-
 @app.get("/assets")
 async def get_assets(sector: Optional[str] = None):
     """Get top 100 tokens, optionally filtered by sector."""
@@ -450,35 +441,35 @@ async def get_assets(sector: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/assets/sync")
+async def manual_asset_sync():
+    """Manually trigger a CoinGecko sync."""
+    try:
+        count = await sync_assets_from_coingecko()
+        return {"status": "ok", "synced": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/portfolio-impact/{event_id}")
 async def portfolio_impact(event_id: str):
-    """
-    Run portfolio impact analysis for a corpus event against top 100 tokens.
-    Returns which assets are most affected and how.
-    """
+    """Run portfolio impact analysis against top 100 tokens."""
     import openai as _openai
 
-    # Get the event from corpus
     try:
         conn = await get_db_conn()
         event = await conn.fetchrow("SELECT * FROM corpus WHERE event_id = $1", event_id)
         if not event:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
-        # Check if already analyzed
         existing = await conn.fetch(
             "SELECT * FROM portfolio_impacts WHERE event_id = $1 ORDER BY confidence DESC", event_id)
         if existing:
             await conn.close()
-            return {
-                "status": "ok",
-                "event_id": event_id,
-                "cached": True,
-                "impacts": [dict(r) for r in existing]
-            }
+            return {"status": "ok", "event_id": event_id, "cached": True, "impacts": [dict(r) for r in existing]}
 
-        # Get top 100 assets
-        assets = await conn.fetch("SELECT coin_id, symbol, name, sector, current_price_usd, price_change_24h FROM assets ORDER BY market_cap_rank ASC LIMIT 100")
+        assets = await conn.fetch(
+            "SELECT coin_id, symbol, name, sector, current_price_usd, price_change_24h FROM assets ORDER BY market_cap_rank ASC LIMIT 100")
         await conn.close()
     except HTTPException:
         raise
@@ -486,9 +477,8 @@ async def portfolio_impact(event_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
     if not assets:
-        raise HTTPException(status_code=404, detail="No assets found — run /assets sync first")
+        raise HTTPException(status_code=404, detail="No assets found — run /assets/sync first")
 
-    # Build asset list for prompt
     asset_list = "\n".join([
         f"{i+1}. {dict(a)['symbol']} ({dict(a)['name']}) — sector: {dict(a)['sector']}, 24h: {dict(a)['price_change_24h']:+.1f}%"
         for i, a in enumerate(assets)
@@ -512,7 +502,7 @@ TOP 100 TOKENS:
 {asset_list}
 
 Identify the 10-15 most meaningfully impacted tokens. For each return:
-- impact_direction: "positive" | "negative" | "neutral"  
+- impact_direction: "positive" | "negative" | "neutral"
 - impact_severity: "high" | "medium" | "low"
 - rationale: one sentence explaining why
 
@@ -544,7 +534,6 @@ Return JSON:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {e}")
 
-    # Persist impacts
     try:
         conn = await get_db_conn()
         for impact in result.get("impacts", []):
@@ -574,3 +563,19 @@ Return JSON:
         "summary": result.get("summary", ""),
         "impacts": result.get("impacts", [])
     }
+
+
+@app.get("/debug")
+async def debug():
+    import openai, os
+    try:
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Say hello in JSON: {\"message\": \"hello\"}"}],
+            response_format={"type": "json_object"},
+            max_tokens=50
+        )
+        return {"status": "ok", "response": response.choices[0].message.content}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "type": type(e).__name__}
