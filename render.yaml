@@ -11,4 +11,4 @@ services:
 
 databases:
   - name: collective-db
-    plan: starter
+    plan: free
