@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: collective-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+
+databases:
+  - name: collective-db
+    plan: starter
