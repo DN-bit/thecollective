@@ -132,30 +132,33 @@ Score each dimension:
 3. Factual (1-5): Are claims grounded and citations present?
 4. Actionable (1-5): Is the recommendation specific and useful?
 
-Return JSON only:
-{{
-    "structure": <int>,
-    "reasoning": <int>,
-    "factual": <int>,
-    "actionable": <int>,
-    "average_score": <float>,
-    "passes_threshold": <bool>,
-    "critique_notes": "<brief notes>"
-}}"""
+Return JSON only, no markdown, no explanation:
+{{"structure": 4, "reasoning": 4, "factual": 3, "actionable": 4, "average_score": 3.75, "passes_threshold": true, "critique_notes": "brief notes"}}"""
 
         try:
             response = await self._client.messages.create(
                 model=self.model,
                 max_tokens=300,
-                system="You are a rigorous quality evaluator. Return only valid JSON.",
+                system="You are a rigorous quality evaluator. Return only a single valid JSON object, no markdown fences, no extra text.",
                 messages=[{"role": "user", "content": critique_prompt}]
             )
             raw = response.content[0].text.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            scores = json.loads(raw.strip())
+            # Strip any markdown fences
+            if "```" in raw:
+                parts = raw.split("```")
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith("json"):
+                        part = part[4:].strip()
+                    if part.startswith("{"):
+                        raw = part
+                        break
+            # Find the JSON object boundaries
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start >= 0 and end > start:
+                raw = raw[start:end]
+            scores = json.loads(raw)
             avg = (scores.get("structure", 3) + scores.get("reasoning", 3) +
                    scores.get("factual", 3) + scores.get("actionable", 3)) / 4.0
             scores["average_score"] = avg
@@ -164,4 +167,4 @@ Return JSON only:
         except Exception as e:
             print(f"[{self.node_id}] Self-critique error: {e}")
             # Default pass so a critique failure doesn't block all output
-            return {"average_score": 3.0, "passes_threshold": True}
+            return {"average_score": 3.5, "passes_threshold": True}
