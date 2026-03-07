@@ -115,34 +115,14 @@ def clean_post(raw: dict) -> dict | None:
                 raw.get("metadata", {}).get("datePublished", "")
     content = raw.get("markdown", "") or raw.get("content", "")
 
-    # Skip index/tag pages and very short pages
-    if not content or len(content) < 500:
-        return None
-    if "/blog/tag/" in url or "/blog/author/" in url:
-        return None
-    if "market-recap" in url and url.endswith("/blog/tag/market-recap"):
-        return None
+    print(f"[Scraper] Page: {url[:80]} | len={len(content)} | title={title[:40] if title else 'none'}")
 
-    # Clean up common HubSpot boilerplate
-    lines = content.split("\n")
-    cleaned_lines = []
-    skip_patterns = [
-        "subscribe", "newsletter", "follow us", "share this",
-        "related posts", "you might also like", "cookie", "privacy policy",
-        "©", "all rights reserved", "arca.com", "ar.ca/blog"
-    ]
-    for line in lines:
-        line_lower = line.lower()
-        if any(p in line_lower for p in skip_patterns):
-            continue
-        cleaned_lines.append(line)
-
-    clean_content = "\n".join(cleaned_lines).strip()
-    word_count = len(clean_content.split())
-
-    if word_count < 200:
+    # Skip truly empty pages only
+    if not content or len(content) < 200:
+        print(f"[Scraper] SKIP: too short ({len(content)} chars)")
         return None
 
+    word_count = len(content.split())
     post_id = hashlib.md5(url.encode()).hexdigest()
 
     return {
@@ -150,7 +130,7 @@ def clean_post(raw: dict) -> dict | None:
         "url": url,
         "title": title,
         "published_date": published,
-        "content": clean_content,
+        "content": content,
         "word_count": word_count
     }
 
