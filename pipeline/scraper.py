@@ -71,10 +71,7 @@ async def crawl_blog(max_pages: int = 200) -> list:
                 "scrapeOptions": {
                     "formats": ["markdown"],
                     "onlyMainContent": True,
-                    "excludeTags": ["nav", "footer", "header", ".hs-nav", ".blog-listing", ".related-posts"]
                 },
-                "includePaths": ["/blog/"],
-                "excludePaths": ["/blog/tag/", "/blog/author/"],
             }
         )
         if resp.status_code != 200:
@@ -220,7 +217,7 @@ async def main():
     total = await conn.fetchval("SELECT COUNT(*) FROM arca_posts")
     total_words = await conn.fetchval("SELECT SUM(word_count) FROM arca_posts")
     await conn.close()
-    print(f"[Scraper] Database now has {total} posts, ~{total_words:,} total words")
+    print(f"[Scraper] Database now has {total} posts, ~{total_words or 0:,} total words")
     print("[Scraper] Done. Ready for RAG indexing.")
 
 
