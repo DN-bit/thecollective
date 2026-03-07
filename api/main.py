@@ -63,7 +63,9 @@ async def init_db():
                 judged BOOLEAN DEFAULT FALSE,
                 judge_scores JSONB,
                 created_at TIMESTAMPTZ DEFAULT NOW()
-            );
+            )
+        """)
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS generations (
                 id SERIAL PRIMARY KEY,
                 event_id TEXT NOT NULL,
@@ -73,7 +75,9 @@ async def init_db():
                 confidence FLOAT,
                 compute_cost_usd FLOAT,
                 created_at TIMESTAMPTZ DEFAULT NOW()
-            );
+            )
+        """)
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS judgments (
                 id SERIAL PRIMARY KEY,
                 event_id TEXT NOT NULL,
@@ -85,7 +89,10 @@ async def init_db():
                 notes TEXT,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(event_id, judge_name)
-            );
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS assets (
                 id SERIAL PRIMARY KEY,
                 coin_id TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
@@ -96,7 +103,9 @@ async def init_db():
                 current_price_usd FLOAT,
                 price_change_24h FLOAT,
                 updated_at TIMESTAMPTZ DEFAULT NOW()
-            );
+            )
+        """)
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS portfolio_impacts (
                 id SERIAL PRIMARY KEY,
                 event_id TEXT NOT NULL,
@@ -109,8 +118,10 @@ async def init_db():
                 confidence FLOAT,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(event_id, coin_id)
-            );
+            )
         """)
+        # Safe column additions for existing tables
+        await conn.execute("ALTER TABLE portfolio_impacts ADD COLUMN IF NOT EXISTS mechanism TEXT")
     finally:
         await conn.close()
 
@@ -123,9 +134,10 @@ async def sync_assets_from_coingecko():
     headers = {"Accept": "application/json"}
     params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1}
 
-    # Demo key uses x-cg-demo-api-key header; Pro key uses x-cg-pro-api-key
     if api_key:
+        # Demo API key — pass as both header and query param for compatibility
         headers["x-cg-demo-api-key"] = api_key
+        params["x_cg_demo_api_key"] = api_key
 
     async with _httpx.AsyncClient() as client:
         resp = await client.get(
@@ -796,3 +808,29 @@ async def debug():
         return {"status": "ok", "response": response.content[0].text}
     except Exception as e:
         return {"status": "error", "error": str(e), "type": type(e).__name__}
+
+
+@app.post("/migrate")
+async def run_migration():
+    """Run any pending DB migrations. Safe to call multiple times."""
+    try:
+        conn = await get_db_conn()
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS judgments (
+                id SERIAL PRIMARY KEY,
+                event_id TEXT NOT NULL,
+                judge_name TEXT NOT NULL,
+                logic_score FLOAT NOT NULL,
+                truth_score FLOAT NOT NULL,
+                source_score FLOAT NOT NULL,
+                average_score FLOAT NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(event_id, judge_name)
+            );
+            ALTER TABLE portfolio_impacts ADD COLUMN IF NOT EXISTS mechanism TEXT;
+        """)
+        await conn.close()
+        return {"status": "ok", "message": "Migration complete"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
