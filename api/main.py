@@ -624,10 +624,181 @@ TOKEN_RISK_PROFILES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Evidence Layer — DefiLlama + on-chain data enrichment
+# ---------------------------------------------------------------------------
+
+# Maps CoinGecko coin_id to DefiLlama protocol slug
+DEFI_LLAMA_SLUGS = {
+    "aave":              "aave",
+    "uniswap":           "uniswap",
+    "maker":             "makerdao",
+    "dai":               "makerdao",
+    "staked-ether":      "lido",
+    "chainlink":         "chainlink",
+    "injective-protocol":"injective",
+    "hyperliquid":       "hyperliquid",
+    "arbitrum":          "arbitrum",
+    "optimism":          "optimism",
+    "near":              "near",
+    "avalanche-2":       "avalanche",
+    "solana":            "solana",
+    "ethereum":          "ethereum",
+    "sui":               "sui",
+    "aptos":             "aptos",
+    "mantle":            "mantle",
+}
+
+
+async def fetch_defi_llama_tvl(protocol_slug: str) -> Optional[Dict]:
+    """Fetch current TVL and 24h/7d change from DefiLlama."""
+    import httpx as _httpx
+    try:
+        async with _httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"https://api.llama.fi/protocol/{protocol_slug}")
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            tvl_history = data.get("tvl", [])
+            if len(tvl_history) < 2:
+                return None
+            current_tvl = tvl_history[-1].get("totalLiquidityUSD", 0)
+            tvl_24h_ago = tvl_history[-2].get("totalLiquidityUSD", current_tvl) if len(tvl_history) > 1 else current_tvl
+            tvl_7d_ago  = tvl_history[-8].get("totalLiquidityUSD", current_tvl) if len(tvl_history) > 7 else current_tvl
+            change_24h = ((current_tvl - tvl_24h_ago) / tvl_24h_ago * 100) if tvl_24h_ago else 0
+            change_7d  = ((current_tvl - tvl_7d_ago)  / tvl_7d_ago  * 100) if tvl_7d_ago  else 0
+            return {
+                "tvl_usd": current_tvl,
+                "tvl_formatted": f"${current_tvl/1e9:.2f}B" if current_tvl > 1e9 else f"${current_tvl/1e6:.1f}M",
+                "change_24h": round(change_24h, 2),
+                "change_7d":  round(change_7d, 2),
+                "chain_tvls": data.get("chainTvls", {}),
+            }
+    except Exception as e:
+        print(f"[Evidence] DefiLlama error for {protocol_slug}: {e}")
+        return None
+
+
+async def fetch_defi_llama_stablecoins() -> Optional[Dict]:
+    """Fetch stablecoin peg data from DefiLlama."""
+    import httpx as _httpx
+    try:
+        async with _httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://stablecoins.llama.fi/stablecoins?includePrices=true")
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            coins = data.get("peggedAssets", [])
+            result = {}
+            for coin in coins:
+                name = coin.get("name", "").lower()
+                price = coin.get("price", 1.0)
+                peg_deviation = abs(price - 1.0) * 100 if price else 0
+                if any(s in name for s in ["tether", "usdc", "dai", "usdt"]):
+                    result[coin.get("symbol", name)] = {
+                        "price": price,
+                        "peg_deviation_pct": round(peg_deviation, 4),
+                        "circulating_usd": coin.get("circulating", {}).get("peggedUSD", 0),
+                        "at_peg": peg_deviation < 0.1
+                    }
+            return result
+    except Exception as e:
+        print(f"[Evidence] Stablecoin fetch error: {e}")
+        return None
+
+
+async def fetch_defi_llama_yields(protocol: str) -> Optional[list]:
+    """Fetch top yield pools for a protocol."""
+    import httpx as _httpx
+    try:
+        async with _httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://yields.llama.fi/pools")
+            if resp.status_code != 200:
+                return None
+            pools = resp.json().get("data", [])
+            matching = [p for p in pools if protocol.lower() in p.get("project", "").lower()]
+            matching.sort(key=lambda x: x.get("tvlUsd", 0), reverse=True)
+            return [{
+                "pool": p.get("symbol", ""),
+                "chain": p.get("chain", ""),
+                "tvl_usd": p.get("tvlUsd", 0),
+                "apy": round(p.get("apy", 0), 2),
+                "apy_7d_mean": round(p.get("apyMean30d", 0), 2),
+            } for p in matching[:5]]
+    except Exception as e:
+        print(f"[Evidence] Yields fetch error for {protocol}: {e}")
+        return None
+
+
+async def gather_evidence(impacts: list, event_description: str) -> Dict[str, Dict]:
+    """
+    For HIGH and MEDIUM severity impacts, gather on-chain evidence from DefiLlama.
+    Returns a dict keyed by coin_id with evidence data.
+    """
+    evidence = {}
+    tasks = []
+
+    for impact in impacts:
+        coin_id = impact.get("coin_id", "")
+        severity = impact.get("impact_severity", "low")
+        mechanism = impact.get("mechanism", "")
+
+        if severity not in ("high", "medium"):
+            continue
+
+        slug = DEFI_LLAMA_SLUGS.get(coin_id)
+        coin_evidence = {"coin_id": coin_id, "sources": []}
+
+        # Fetch TVL if it's a DeFi protocol
+        if slug:
+            tvl_data = await fetch_defi_llama_tvl(slug)
+            if tvl_data:
+                signal = "⚠️ TVL declining" if tvl_data["change_24h"] < -2 else ("✅ TVL stable" if abs(tvl_data["change_24h"]) < 1 else "📈 TVL rising")
+                coin_evidence["tvl"] = tvl_data
+                coin_evidence["sources"].append({
+                    "type": "defi_llama_tvl",
+                    "label": f"DefiLlama TVL: {tvl_data['tvl_formatted']} ({tvl_data['change_24h']:+.1f}% 24h)",
+                    "signal": signal,
+                    "supports_thesis": tvl_data["change_24h"] < -1,
+                    "data": tvl_data
+                })
+
+            # Fetch yield data for lending protocols
+            if any(x in coin_id for x in ["aave", "maker", "compound"]):
+                yields = await fetch_defi_llama_yields(slug)
+                if yields:
+                    top = yields[0] if yields else None
+                    if top:
+                        coin_evidence["sources"].append({
+                            "type": "defi_llama_yields",
+                            "label": f"Top pool: {top['pool']} — APY {top['apy']}%, TVL ${top['tvl_usd']/1e6:.1f}M",
+                            "signal": "⚠️ APY spike (stress)" if top['apy'] > 15 else "✅ APY normal",
+                            "supports_thesis": top['apy'] > 15,
+                            "data": yields
+                        })
+
+        # Stablecoin peg check
+        if any(x in coin_id for x in ["tether", "usd-coin", "dai", "stablecoin"]):
+            stables = await fetch_defi_llama_stablecoins()
+            if stables:
+                for sym, data in stables.items():
+                    coin_evidence["sources"].append({
+                        "type": "peg_check",
+                        "label": f"{sym} peg: ${data['price']:.4f} ({data['peg_deviation_pct']:+.4f}% deviation)",
+                        "signal": "⚠️ Depeg risk" if not data["at_peg"] else "✅ At peg",
+                        "supports_thesis": not data["at_peg"],
+                        "data": data
+                    })
+
+        if coin_evidence["sources"]:
+            evidence[coin_id] = coin_evidence
+
+    return evidence
+
+
 @app.post("/portfolio-impact/{event_id}")
 async def portfolio_impact(event_id: str, force_refresh: bool = False):
-    """Run deep portfolio impact analysis against top 100 tokens."""
-    # anthropic already imported at top
+    """Run deep portfolio impact analysis against top 100 tokens with on-chain evidence."""
 
     try:
         conn = await get_db_conn()
@@ -641,7 +812,10 @@ async def portfolio_impact(event_id: str, force_refresh: bool = False):
                 "SELECT * FROM portfolio_impacts WHERE event_id = $1 ORDER BY confidence DESC", event_id)
             if existing:
                 await conn.close()
-                return {"status": "ok", "event_id": event_id, "cached": True, "impacts": [dict(r) for r in existing]}
+                # Re-gather evidence on cache hit too (live data)
+                impacts = [dict(r) for r in existing]
+                evidence = await gather_evidence(impacts, dict(event).get("description", ""))
+                return {"status": "ok", "event_id": event_id, "cached": True, "impacts": impacts, "evidence": evidence}
 
         assets = await conn.fetch(
             "SELECT coin_id, symbol, name, sector, current_price_usd, price_change_24h, market_cap_rank FROM assets ORDER BY market_cap_rank ASC LIMIT 100")
@@ -787,12 +961,16 @@ Return JSON:
     except Exception as e:
         print(f"[Collective] WARNING: Impact persist failed: {e}")
 
+    # Gather on-chain evidence for HIGH/MEDIUM impacts
+    evidence = await gather_evidence(result.get("impacts", []), event_dict.get("description", ""))
+
     return {
         "status": "ok",
         "event_id": event_id,
         "cached": False,
         "summary": result.get("summary", ""),
-        "impacts": result.get("impacts", [])
+        "impacts": result.get("impacts", []),
+        "evidence": evidence
     }
 
 
