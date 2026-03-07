@@ -77,6 +77,26 @@ def score_impact(title: str, summary: str) -> float:
     return 0.30
 
 
+CRYPTO_KEYWORDS = [
+    "bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "defi", "nft",
+    "token", "stablecoin", "web3", "solana", "sol", "ripple", "xrp", "binance",
+    "coinbase", "exchange", "wallet", "mining", "validator", "staking", "yield",
+    "protocol", "dao", "dex", "amm", "tvl", "airdrop", "altcoin", "memecoin",
+    "digital asset", "digital currency", "central bank digital", "cbdc",
+    "sec crypto", "cftc crypto", "fed crypto", "treasury crypto",
+    "spot etf", "bitcoin etf", "ethereum etf", "crypto etf",
+    "tether", "usdc", "usdt", "stablecoin", "circle", "paxos",
+    "blackrock bitcoin", "fidelity bitcoin", "grayscale",
+    "on-chain", "layer 2", "layer2", "rollup", "zk proof",
+    "arca", "dragonfly", "a16z crypto", "paradigm", "multicoin"
+]
+
+def is_crypto_relevant(title: str, summary: str) -> bool:
+    """Returns True only if the story has a genuine crypto angle."""
+    text = (title + " " + summary).lower()
+    return any(kw in text for kw in CRYPTO_KEYWORDS)
+
+
 def infer_domain(title: str, summary: str, default_domain: str) -> str:
     text = (title + " " + summary).lower()
     if any(k in text for k in ["sec", "cftc", "congress", "senate", "regulation", "legislation", "law", "clarity", "fit21"]):
@@ -247,7 +267,15 @@ async def run():
         skipped_dup = 0
         skipped_low = 0
 
+        skipped_irrelevant = 0
+
         for item in all_items:
+            # Crypto relevance gate — drop non-crypto stories entirely
+            if not is_crypto_relevant(item["title"], item.get("summary", "")):
+                skipped_irrelevant += 1
+                log.info(f"SKIP (not crypto): {item['title'][:60]}")
+                continue
+
             event_id = make_event_id(item["title"])
 
             # Check deduplication
@@ -269,7 +297,7 @@ async def run():
 
         await db_conn.close()
 
-        log.info(f"=== Cycle complete: {submitted} generated, {skipped_dup} duplicates, {skipped_low} low-impact ===")
+        log.info(f"=== Cycle complete: {submitted} generated, {skipped_dup} duplicates, {skipped_low} low-impact, {skipped_irrelevant} not crypto-relevant ===")
 
 
 if __name__ == "__main__":
