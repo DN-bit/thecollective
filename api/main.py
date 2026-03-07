@@ -755,11 +755,11 @@ async def gather_evidence(impacts: list, event_description: str) -> Dict[str, Di
         if slug:
             tvl_data = await fetch_defi_llama_tvl(slug)
             if tvl_data:
-                signal = "⚠️ TVL declining" if tvl_data["change_24h"] < -2 else ("✅ TVL stable" if abs(tvl_data["change_24h"]) < 1 else "📈 TVL rising")
+                signal = "⚠️ TVL declining" if (tvl_data["change_24h"] or 0) < -2 else ("✅ TVL stable" if abs(tvl_data["change_24h"] or 0) < 1 else "📈 TVL rising")
                 coin_evidence["tvl"] = tvl_data
                 coin_evidence["sources"].append({
                     "type": "defi_llama_tvl",
-                    "label": f"DefiLlama TVL: {tvl_data['tvl_formatted']} ({tvl_data['change_24h']:+.1f}% 24h)",
+                    "label": f"DefiLlama TVL: {tvl_data['tvl_formatted']} ({(tvl_data['change_24h'] or 0):+.1f}% 24h)",
                     "signal": signal,
                     "supports_thesis": tvl_data["change_24h"] < -1,
                     "data": tvl_data
