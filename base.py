@@ -86,7 +86,7 @@ class SpecialistNode(ABC):
         try:
             response = await self._client.messages.create(
                 model=self.model,
-                max_tokens=2000,
+                max_tokens=3000,
                 system=self.system_prompt,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -138,7 +138,7 @@ Return JSON only, no markdown, no explanation:
         try:
             response = await self._client.messages.create(
                 model=self.model,
-                max_tokens=300,
+                max_tokens=800,
                 system="You are a rigorous quality evaluator. Return only a single valid JSON object, no markdown fences, no extra text.",
                 messages=[{"role": "user", "content": critique_prompt}]
             )
