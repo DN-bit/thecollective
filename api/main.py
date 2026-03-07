@@ -74,7 +74,18 @@ async def init_db():
                 compute_cost_usd FLOAT,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
-            CREATE TABLE IF NOT EXISTS assets (
+            CREATE TABLE IF NOT EXISTS judgments (
+                id SERIAL PRIMARY KEY,
+                event_id TEXT NOT NULL,
+                judge_name TEXT NOT NULL,
+                logic_score FLOAT NOT NULL,
+                truth_score FLOAT NOT NULL,
+                source_score FLOAT NOT NULL,
+                average_score FLOAT NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(event_id, judge_name)
+            );
                 id SERIAL PRIMARY KEY,
                 coin_id TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
@@ -191,6 +202,7 @@ class EventRequest(BaseModel):
 
 class JudgeRequest(BaseModel):
     event_id: str
+    judge_name: str
     scores: Dict[str, float]
     notes: Optional[str] = None
 
@@ -311,20 +323,51 @@ async def generate(request: EventRequest):
 
 
 @app.get("/corpus")
-async def get_corpus(limit: int = 20, judged: Optional[bool] = None, domain: Optional[str] = None):
+async def get_corpus(limit: int = 20, offset: int = 0, judged: Optional[bool] = None, domain: Optional[str] = None):
     try:
         conn = await get_db_conn()
-        query = "SELECT * FROM corpus WHERE 1=1"
+        # Count total for pagination
+        count_query = "SELECT COUNT(*) FROM corpus WHERE 1=1"
+        data_query = "SELECT * FROM corpus WHERE 1=1"
         params = []
         i = 1
         if judged is not None:
-            query += f" AND judged = ${i}"; params.append(judged); i += 1
+            count_query += f" AND judged = ${i}"
+            data_query  += f" AND judged = ${i}"
+            params.append(judged); i += 1
         if domain:
-            query += f" AND domain = ${i}"; params.append(domain); i += 1
-        query += f" ORDER BY created_at DESC LIMIT ${i}"; params.append(limit)
-        rows = await conn.fetch(query, *params)
+            count_query += f" AND domain = ${i}"
+            data_query  += f" AND domain = ${i}"
+            params.append(domain); i += 1
+        total = await conn.fetchval(count_query, *params)
+        data_query  += f" ORDER BY created_at DESC LIMIT ${i} OFFSET ${i+1}"
+        params.extend([limit, offset])
+        rows = await conn.fetch(data_query, *params)
+        # Get judgment counts for all returned entries
+        if rows:
+            event_ids = [r['event_id'] for r in rows]
+            counts = await conn.fetch("""
+                SELECT event_id, COUNT(*) as judgment_count, array_agg(judge_name) as judges
+                FROM judgments WHERE event_id = ANY($1)
+                GROUP BY event_id
+            """, event_ids)
+            count_map = {r['event_id']: {'judgment_count': r['judgment_count'], 'judges': list(r['judges'])} for r in counts}
+        else:
+            count_map = {}
         await conn.close()
-        return {"status": "ok", "count": len(rows), "entries": [dict(r) for r in rows]}
+        entries = []
+        for r in rows:
+            e = dict(r)
+            e.update(count_map.get(e['event_id'], {'judgment_count': 0, 'judges': []}))
+            entries.append(e)
+        return {
+            "status": "ok",
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "count": len(entries),
+            "entries": entries
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -333,13 +376,71 @@ async def get_corpus(limit: int = 20, judged: Optional[bool] = None, domain: Opt
 async def judge_entry(event_id: str, request: JudgeRequest):
     try:
         conn = await get_db_conn()
-        result = await conn.execute("""
-            UPDATE corpus SET judged = TRUE, judge_scores = $1::jsonb WHERE event_id = $2
-        """, json.dumps(request.scores), event_id)
-        await conn.close()
-        if result == "UPDATE 0":
+
+        # Verify entry exists
+        exists = await conn.fetchval("SELECT 1 FROM corpus WHERE event_id = $1", event_id)
+        if not exists:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
-        return {"status": "judged", "event_id": event_id, "scores": request.scores}
+
+        avg = (request.scores.get("logic", 3) + request.scores.get("truth", 3) + request.scores.get("source", 3)) / 3.0
+
+        # Upsert into judgments table (one row per judge per entry)
+        await conn.execute("""
+            INSERT INTO judgments (event_id, judge_name, logic_score, truth_score, source_score, average_score, notes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (event_id, judge_name) DO UPDATE SET
+                logic_score = EXCLUDED.logic_score,
+                truth_score = EXCLUDED.truth_score,
+                source_score = EXCLUDED.source_score,
+                average_score = EXCLUDED.average_score,
+                notes = EXCLUDED.notes,
+                created_at = NOW()
+        """, event_id, request.judge_name,
+            request.scores.get("logic", 3),
+            request.scores.get("truth", 3),
+            request.scores.get("source", 3),
+            avg, request.notes)
+
+        # Aggregate all judgments for this entry
+        agg = await conn.fetchrow("""
+            SELECT COUNT(*) as count,
+                   AVG(logic_score) as logic,
+                   AVG(truth_score) as truth,
+                   AVG(source_score) as source,
+                   AVG(average_score) as average,
+                   array_agg(judge_name) as judges
+            FROM judgments WHERE event_id = $1
+        """, event_id)
+
+        # Update corpus with aggregated scores and mark judged
+        await conn.execute("""
+            UPDATE corpus SET
+                judged = TRUE,
+                judge_scores = $1::jsonb
+            WHERE event_id = $2
+        """, json.dumps({
+            "logic": round(agg["logic"], 2),
+            "truth": round(agg["truth"], 2),
+            "source": round(agg["source"], 2),
+            "average": round(agg["average"], 2),
+            "judgment_count": agg["count"],
+            "judges": list(agg["judges"])
+        }), event_id)
+
+        await conn.close()
+        return {
+            "status": "judged",
+            "event_id": event_id,
+            "judge_name": request.judge_name,
+            "judgment_count": agg["count"],
+            "judges": list(agg["judges"]),
+            "aggregate_scores": {
+                "logic": round(agg["logic"], 2),
+                "truth": round(agg["truth"], 2),
+                "source": round(agg["source"], 2),
+                "average": round(agg["average"], 2),
+            }
+        }
     except HTTPException:
         raise
     except Exception as e:
