@@ -834,10 +834,12 @@ async def portfolio_impact(event_id: str, force_refresh: bool = False):
         ad = dict(a)
         profile = TOKEN_RISK_PROFILES.get(ad['coin_id'], "")
         profile_str = f" | PROFILE: {profile}" if profile else ""
+        price_change = ad['price_change_24h'] or 0.0
+        price = ad['current_price_usd'] or 0.0
         asset_lines.append(
             f"{i+1}. {ad['symbol']} ({ad['name']}) — sector: {ad['sector']}, "
-            f"rank: #{ad['market_cap_rank']}, 24h: {ad['price_change_24h']:+.1f}%, "
-            f"price: ${ad['current_price_usd']:,.2f}{profile_str}"
+            f"rank: #{ad['market_cap_rank']}, 24h: {price_change:+.1f}%, "
+            f"price: ${price:,.2f}{profile_str}"
         )
     asset_list = "\n".join(asset_lines)
 
