@@ -94,11 +94,21 @@ class SpecialistNode(ABC):
 
             # Strip markdown fences if present
             clean = raw_text.strip()
-            if clean.startswith("```"):
-                clean = clean.split("```")[1]
-                if clean.startswith("json"):
-                    clean = clean[4:]
-            clean = clean.strip()
+            if "```" in clean:
+                parts = clean.split("```")
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith("json"):
+                        part = part[4:].strip()
+                    if part.startswith("{"):
+                        clean = part
+                        break
+
+            # Find JSON object boundaries robustly
+            start = clean.find("{")
+            end = clean.rfind("}") + 1
+            if start >= 0 and end > start:
+                clean = clean[start:end]
 
             output_data = json.loads(clean)
 
