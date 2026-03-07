@@ -840,7 +840,7 @@ async def portfolio_impact(event_id: str, force_refresh: bool = False):
         price = ad['current_price_usd'] or 0.0
         asset_lines.append(
             f"{i+1}. {ad['symbol']} ({ad['name']}) — sector: {ad['sector']}, "
-            f"rank: #{ad['market_cap_rank']}, 24h: {price_change:+.1f}%, "
+            f"rank: #{ad['market_cap_rank'] or 'N/A'}, 24h: {price_change:+.1f}%, "
             f"price: ${price:,.2f}{profile_str}"
         )
     asset_list = "\n".join(asset_lines)
