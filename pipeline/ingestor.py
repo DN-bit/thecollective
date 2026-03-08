@@ -1,11 +1,10 @@
 # The Collective - Automated News Ingestion Pipeline
-# Pulls from RSS feeds + CryptoPanic, scores impact, submits to /generate
+# Pulls from RSS feeds + CryptoPanic + CoinDesk API, scores impact, submits to /generate
 # Runs as a Render Cron Job every 2 hours
 
 import os
 import re
 import sys
-import json
 import hashlib
 import asyncio
 import logging
@@ -27,21 +26,32 @@ API_BASE = os.getenv("API_BASE_URL", "https://collective-api-3plq.onrender.com")
 
 RSS_FEEDS = [
     # Macro / Traditional Finance
-    {"url": "https://feeds.bloomberg.com/markets/news.rss",         "domain": "macro",     "source": "Bloomberg"},
-    {"url": "https://feeds.reuters.com/reuters/businessNews",        "domain": "macro",     "source": "Reuters"},
-    {"url": "https://www.ft.com/rss/home",                          "domain": "macro",     "source": "FT"},
-    # Crypto
-    {"url": "https://www.coindesk.com/arc/outboundfeeds/rss/",      "domain": "macro",     "source": "CoinDesk"},
-    {"url": "https://cointelegraph.com/rss",                        "domain": "macro",     "source": "CoinTelegraph"},
-    {"url": "https://theblock.co/rss.xml",                          "domain": "defi",      "source": "TheBlock"},
-    {"url": "https://decrypt.co/feed",                              "domain": "sentiment", "source": "Decrypt"},
+    {"url": "https://feeds.bloomberg.com/markets/news.rss",              "domain": "macro",     "source": "Bloomberg"},
+    {"url": "https://feeds.reuters.com/reuters/businessNews",             "domain": "macro",     "source": "Reuters"},
+    {"url": "https://www.ft.com/rss/home",                               "domain": "macro",     "source": "FT"},
+    # Crypto — core
+    {"url": "https://www.coindesk.com/arc/outboundfeeds/rss/",           "domain": "macro",     "source": "CoinDesk"},
+    {"url": "https://cointelegraph.com/rss",                             "domain": "macro",     "source": "CoinTelegraph"},
+    {"url": "https://theblock.co/rss.xml",                               "domain": "defi",      "source": "TheBlock"},
+    {"url": "https://decrypt.co/feed",                                   "domain": "sentiment", "source": "Decrypt"},
+    # Crypto — additional
+    {"url": "https://bitcoinmagazine.com/feed",                          "domain": "macro",     "source": "Bitcoin Magazine"},
+    {"url": "https://cryptoslate.com/feed/",                             "domain": "macro",     "source": "CryptoSlate"},
+    {"url": "https://bitcoinist.com/feed/",                              "domain": "macro",     "source": "Bitcoinist"},
+    {"url": "https://thedefiant.io/feed",                                "domain": "defi",      "source": "The Defiant"},
+    {"url": "https://banklesshq.com/feed",                               "domain": "defi",      "source": "Bankless"},
     # Policy / Regulatory
-    {"url": "https://www.sec.gov/rss/news/press.xml",               "domain": "policy",    "source": "SEC"},
-    {"url": "https://www.cftc.gov/rss/pressreleases.xml",           "domain": "policy",    "source": "CFTC"},
+    {"url": "https://www.sec.gov/rss/news/press.xml",                    "domain": "policy",    "source": "SEC"},
+    {"url": "https://www.cftc.gov/rss/pressreleases.xml",                "domain": "policy",    "source": "CFTC"},
+    {"url": "https://www.coincenter.org/feed/",                          "domain": "policy",    "source": "Coin Center"},
+    {"url": "https://www.federalreserve.gov/feeds/press_all.xml",        "domain": "macro",     "source": "Federal Reserve"},
+    {"url": "https://home.treasury.gov/system/files/rss/press.xml",      "domain": "policy",    "source": "Treasury"},
 ]
 
 CRYPTOPANIC_API_KEY = os.getenv("CRYPTOPANIC_API_KEY", "")
 CRYPTOPANIC_URL = "https://cryptopanic.com/api/developer/v2/posts/?auth_token={key}&filter=important&public=true"
+
+COINDESK_API_KEY = os.getenv("COINDESK_API_KEY", "")
 
 # ---------------------------------------------------------------------------
 # Relevance — two-tier system
@@ -66,14 +76,19 @@ CRYPTO_AMBIGUOUS = [
     "staking", "yield", "tvl", "dex", "amm", "liquidity pool",
 ]
 
-# Sources where ambiguous terms are fine
-CRYPTO_SOURCES = {"CoinDesk", "CoinTelegraph", "TheBlock", "Decrypt", "CryptoPanic"}
+# Sources where ambiguous terms are acceptable
+CRYPTO_SOURCES = {
+    "CoinDesk", "CoinTelegraph", "TheBlock", "Decrypt", "CryptoPanic",
+    "CoinDesk API", "Bitcoin Magazine", "CryptoSlate", "Bitcoinist",
+    "The Defiant", "Bankless", "Coin Center",
+}
 
 # Hard exclusion patterns — drop even if crypto keywords appear
 NOISE_PATTERNS = [
     r"\bpokemon\b", r"\bminecraft\b", r"\bfortnite\b", r"\bgaming token\b",
     r"\bnft art\b", r"\bnft drop\b", r"\bcelebrity nft\b", r"\bmeme coin launch\b",
     r"\binfluencer\b", r"\byoutuber\b", r"\btwitch\b",
+    r"\bcigarette\b", r"\btobacco\b", r"\bzyn\b", r"\bphilip morris\b",
     r"\bexchange student\b",
     r"\bprotocol (meeting|talks|agreement|accord)\b",
     r"\bmining (company|stock|copper|gold|coal|iron)\b(?!.*crypto|.*bitcoin)",
@@ -146,7 +161,7 @@ def infer_domain(title: str, summary: str, default_domain: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Deduplication — semantic fingerprint catches near-duplicates
+# Deduplication
 # ---------------------------------------------------------------------------
 
 def make_event_id(title: str) -> str:
@@ -176,7 +191,6 @@ def make_content_hash(title: str, summary: str) -> Optional[str]:
 async def already_ingested(conn, event_id: str, content_hash: Optional[str] = None) -> bool:
     row = await conn.fetchrow("SELECT id FROM corpus WHERE event_id = $1", event_id)
     return row is not None
-    
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +220,7 @@ async def fetch_rss_items(client: httpx.AsyncClient, feed: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
-# CryptoPanic ingestion
+# CryptoPanic ingestion — rate limited to 2x/day to stay under 100/mo quota
 # ---------------------------------------------------------------------------
 
 async def fetch_cryptopanic(client: httpx.AsyncClient) -> list:
@@ -218,6 +232,9 @@ async def fetch_cryptopanic(client: httpx.AsyncClient) -> list:
     try:
         url = CRYPTOPANIC_URL.format(key=CRYPTOPANIC_API_KEY)
         resp = await client.get(url, timeout=10)
+        if resp.status_code != 200:
+            log.warning(f"CryptoPanic returned {resp.status_code}: {resp.text[:200]}")
+            return []
         data = resp.json()
         for post in data.get("results", [])[:15]:
             title = post.get("title", "").strip()
@@ -234,6 +251,41 @@ async def fetch_cryptopanic(client: httpx.AsyncClient) -> list:
             })
     except Exception as e:
         log.warning(f"CryptoPanic fetch failed: {e}")
+    return items
+
+
+# ---------------------------------------------------------------------------
+# CoinDesk API ingestion
+# ---------------------------------------------------------------------------
+
+async def fetch_coindesk(client: httpx.AsyncClient) -> list:
+    if not COINDESK_API_KEY:
+        return []
+    items = []
+    try:
+        resp = await client.get(
+            "https://data-api.coindesk.com/news/v1/article/list",
+            headers={"X-API-KEY": COINDESK_API_KEY},
+            params={"limit": 20, "lang": "EN"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            log.warning(f"CoinDesk API returned {resp.status_code}: {resp.text[:200]}")
+            return []
+        data = resp.json()
+        for article in data.get("Data", []):
+            title = article.get("TITLE", "").strip()
+            body = article.get("BODY", article.get("SUBTITLE", "")).strip()
+            if not title:
+                continue
+            items.append({
+                "title": title,
+                "summary": body[:500],
+                "source": "CoinDesk API",
+                "default_domain": "macro",
+            })
+    except Exception as e:
+        log.warning(f"CoinDesk API fetch failed: {e}")
     return items
 
 
@@ -256,8 +308,6 @@ async def submit_to_collective(
 
     domain = infer_domain(item["title"], item.get("summary", ""), item["default_domain"])
     source = item["source"]
-    if content_hash:
-        source = f"{source} hash:{content_hash}"
 
     try:
         resp = await client.post(
@@ -306,6 +356,11 @@ async def run():
         cp_items = await fetch_cryptopanic(client)
         all_items.extend(cp_items)
         log.info(f"CryptoPanic: {len(cp_items)} items")
+
+        cd_items = await fetch_coindesk(client)
+        all_items.extend(cd_items)
+        log.info(f"CoinDesk API: {len(cd_items)} items")
+
         log.info(f"Total raw items: {len(all_items)}")
 
         submitted = 0
