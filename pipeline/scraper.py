@@ -175,7 +175,7 @@ async def main():
     await init_posts_table()
 
     # Crawl
-    raw_pages = await crawl_blog(max_pages=300)
+    raw_pages = await crawl_blog(max_pages=500)
     print(f"[Scraper] Crawl returned {len(raw_pages)} pages")
 
     # Clean
