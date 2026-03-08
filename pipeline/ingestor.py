@@ -176,15 +176,7 @@ def make_content_hash(title: str, summary: str) -> Optional[str]:
 async def already_ingested(conn, event_id: str, content_hash: Optional[str] = None) -> bool:
     row = await conn.fetchrow("SELECT id FROM corpus WHERE event_id = $1", event_id)
     return row is not None
-        return True
-    if content_hash:
-        row = await conn.fetchrow(
-            "SELECT id FROM corpus WHERE source LIKE $1",
-            f"%hash:{content_hash}%"
-        )
-        if row:
-            return True
-    return False
+    
 
 
 # ---------------------------------------------------------------------------
