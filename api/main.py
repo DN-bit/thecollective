@@ -13,6 +13,7 @@ import asyncpg
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 # Ensure repo root is on the path so base.py is importable
@@ -488,6 +489,10 @@ def root():
         "nodes": ["macro", "defi", "policy", "sentiment"],
         "message": "Ready to synchronize."
     }
+@app.get("/dashboard")
+async def dashboard():
+    with open("collective_dashboard.html") as f:
+        return HTMLResponse(f.read())
 
 
 @app.get("/health")
