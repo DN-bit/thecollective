@@ -41,7 +41,7 @@ RSS_FEEDS = [
 ]
 
 CRYPTOPANIC_API_KEY = os.getenv("CRYPTOPANIC_API_KEY", "")
-CRYPTOPANIC_URL = "https://cryptopanic.com/api/v1/posts/?auth_token={key}&filter=important&public=true"
+CRYPTOPANIC_URL = "https://cryptopanic.com/api/free/v2/posts/?auth_token={key}&filter=important&public=true"
 
 # ---------------------------------------------------------------------------
 # Relevance — two-tier system
@@ -175,7 +175,7 @@ def make_content_hash(title: str, summary: str) -> Optional[str]:
 
 async def already_ingested(conn, event_id: str, content_hash: Optional[str] = None) -> bool:
     row = await conn.fetchrow("SELECT id FROM corpus WHERE event_id = $1", event_id)
-    if row:
+    return row is not None
         return True
     if content_hash:
         row = await conn.fetchrow(
