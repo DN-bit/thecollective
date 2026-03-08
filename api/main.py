@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 
 import anthropic
 import asyncpg
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
