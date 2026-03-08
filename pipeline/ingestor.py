@@ -41,7 +41,7 @@ RSS_FEEDS = [
 ]
 
 CRYPTOPANIC_API_KEY = os.getenv("CRYPTOPANIC_API_KEY", "")
-CRYPTOPANIC_URL = "https://cryptopanic.com/api/free/v2/posts/?auth_token={key}&filter=important&public=true"
+CRYPTOPANIC_URL = "https://cryptopanic.com/api/developer/v2/posts/?auth_token={key}&filter=important&public=true"
 
 # ---------------------------------------------------------------------------
 # Relevance — two-tier system
