@@ -212,6 +212,8 @@ async def fetch_rss_items(client: httpx.AsyncClient, feed: dict) -> list:
 async def fetch_cryptopanic(client: httpx.AsyncClient) -> list:
     if not CRYPTOPANIC_API_KEY:
         return []
+    if datetime.now(timezone.utc).hour not in (6, 18):
+        return []
     items = []
     try:
         url = CRYPTOPANIC_URL.format(key=CRYPTOPANIC_API_KEY)
