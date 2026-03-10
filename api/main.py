@@ -2,6 +2,7 @@
 # FastAPI application - Central Mind HTTP interface
 
 import asyncio
+import httpx
 import json
 import os
 import sys
