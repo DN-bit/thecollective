@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Collective — Arca Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #16161f;
+    --border: #1e1e2e;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-mid: #94a3b8;
+    --bull: #10b981;
+    --bear: #ef4444;
+    --neutral: #f59e0b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,212,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-mark {
+    width: 32px;
+    height: 32px;
+    position: relative;
+  }
+
+  .logo-mark svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent3);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  }
+
+  .status-text {
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+
+  /* API Config Bar */
+  .config-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+
+  .config-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .config-label {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .config-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .config-input:focus { border-color: var(--accent); }
+
+  .config-input::placeholder { color: var(--text-dim); }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 7px 16px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
+
+  .btn-primary:hover { background: #33ddff; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-mid);
+  }
+
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .judge-name-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 8px;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .judge-name-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-danger {
+    background: transparent;
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  /* Main layout */
+  .main {
+    padding: 32px 0;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 24px;
+    min-height: calc(100vh - 120px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Event form */
+  .form-group {
+    margin-bottom: 14px;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+  }
+
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--text-dim); }
+
+  .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .impact-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .impact-slider {
+    flex: 1;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .impact-val {
+    color: var(--accent);
+    font-weight: 500;
+    min-width: 32px;
+    text-align: right;
+  }
+
+  /* Domain tags */
+  .domain-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .domain-tag {
+    font-size: 10px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .domain-tag.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+  }
+
+  /* Stats row */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px;
+  }
+
+  .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Main content */
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    gap: 0;
+  }
+
+  .tab {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab:hover:not(.active) { color: var(--text-mid); }
+
+  /* Tab panels */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Intelligence output */
+  .output-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    min-height: 400px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .output-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .output-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .regime-badge {
+    font-size: 10px;
+    padding: 3px 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .regime-bull { background: rgba(16,185,129,0.15); color: var(--bull); border: 1px solid var(--bull); }
+  .regime-bear { background: rgba(239,68,68,0.15); color: var(--bear); border: 1px solid var(--bear); }
+  .regime-neutral { background: rgba(245,158,11,0.15); color: var(--neutral); border: 1px solid var(--neutral); }
+
+  .output-body {
+    padding: 20px;
+  }
+
+  .output-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: var(--text-dim);
+    gap: 12px;
+  }
+
+  .output-empty-icon {
+    font-size: 32px;
+    opacity: 0.3;
+  }
+
+  .output-empty-text {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* Intelligence sections */
+  .intel-section {
+    margin-bottom: 20px;
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .intel-section-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .intel-section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .chain-of-thought {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .cot-step {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .cot-num {
+    color: var(--accent2);
+    font-size: 10px;
+    min-width: 16px;
+    margin-top: 1px;
+  }
+
+  .cot-text {
+    color: var(--text-mid);
+    line-height: 1.6;
+    font-size: 12px;
+  }
+
+  /* Scenarios */
+  .scenarios {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .scenario {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .scenario-outcome { color: var(--text); font-size: 12px; line-height: 1.5; }
+  .scenario-rationale { color: var(--text-dim); font-size: 11px; margin-top: 4px; line-height: 1.5; }
+
+  .scenario-prob {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: right;
+  }
+
+  .scenario-prob-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: right;
+    margin-top: 2px;
+    letter-spacing: 0.1em;
+  }
+
+  .recommendation-box {
+    background: rgba(0,212,255,0.05);
+    border: 1px solid rgba(0,212,255,0.2);
+    padding: 14px;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .confidence-bar {
+    height: 3px;
+    background: var(--border);
+    margin-top: 6px;
+    position: relative;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Digest panel */
+  .digest-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+
+  .digest-body {
+    padding: 20px;
+  }
+
+  .digest-section {
+    margin-bottom: 24px;
+    animation: fadeIn 0.4s ease forwards;
+  }
+
+  .digest-summary {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 400;
+  }
+
+  .themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  .theme-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px;
+  }
+
+  .theme-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .theme-signal {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  .signal-high { background: rgba(16,185,129,0.15); color: var(--bull); }
+  .signal-medium { background: rgba(245,158,11,0.15); color: var(--neutral); }
+  .signal-low { background: rgba(100,116,139,0.15); color: var(--text-dim); }
+
+  .theme-summary { font-size: 11px; color: var(--text-mid); line-height: 1.6; }
+
+  .talking-points {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .talking-point {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .tp-bullet {
+    color: var(--accent3);
+    font-size: 14px;
+    margin-top: -1px;
+  }
+
+  .tp-text {
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: 'Syne', sans-serif;
+  }
+
+  .podcast-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .podcast-topic {
+    background: rgba(124,58,237,0.1);
+    border: 1px solid rgba(124,58,237,0.3);
+    color: #a78bfa;
+    padding: 6px 14px;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+
+  .risks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .risk-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid;
+    gap: 12px;
+  }
+
+  .risk-high { border-left-color: var(--danger); }
+  .risk-medium { border-left-color: var(--warn); }
+  .risk-low { border-left-color: var(--text-dim); }
+
+  .risk-text { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .risk-domain { font-size: 9px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 3px; }
+
+  .risk-severity {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding: 2px 8px;
+  }
+
+  .sev-high { color: var(--danger); border: 1px solid var(--danger); }
+  .sev-medium { color: var(--warn); border: 1px solid var(--warn); }
+  .sev-low { color: var(--text-dim); border: 1px solid var(--text-dim); }
+
+  /* Loading state */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    gap: 12px;
+    color: var(--text-dim);
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    animation: blink 1.4s infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Corpus table */
+  .corpus-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .corpus-table th {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  .corpus-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    vertical-align: top;
+  }
+
+  .corpus-table tr:last-child td { border-bottom: none; }
+  .corpus-table tr:hover td { background: var(--surface2); }
+
+  .judged-yes { color: var(--bull); }
+  .judged-no { color: var(--text-dim); }
+
+  .conf-val { color: var(--accent); }
+
+  /* Error */
+  .error-msg {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--danger);
+    padding: 12px 16px;
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 16px 20px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 32 32" fill="none">
+            <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#00d4ff" stroke-width="1.5" fill="none"/>
+            <polygon points="16,8 24,13 24,21 16,26 8,21 8,13" stroke="#7c3aed" stroke-width="1" fill="rgba(0,212,255,0.05)"/>
+            <circle cx="16" cy="16" r="3" fill="#00d4ff"/>
+            <line x1="16" y1="2" x2="16" y2="8" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+            <line x1="30" y1="10" x2="24" y2="13" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+            <line x1="30" y1="22" x2="24" y2="21" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+            <line x1="16" y1="30" x2="16" y2="26" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+            <line x1="2" y1="22" x2="8" y2="21" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+            <line x1="2" y1="10" x2="8" y2="13" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="logo-text">The Collective</div>
+          <div class="logo-sub">Arca Intelligence — Internal</div>
+        </div>
+      </div>
+      <div class="header-status">
+        <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;margin-right:12px">
+          Judge: <span id="currentJudgeName" onclick="showJudgeSelector()" style="color:var(--accent);cursor:pointer;text-decoration:underline">Select</span>
+        </div>
+        <div class="pulse-dot"></div>
+        <div class="status-text" id="statusText">OFFLINE</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="config-bar">
+  <div class="container">
+    <div class="config-inner">
+      <div class="config-label">API URL</div>
+      <input class="config-input" id="apiUrl" type="text" 
+        placeholder="https://collective-api.onrender.com" 
+        value="https://collective-api.onrender.com"/>
+      <button class="btn btn-ghost" onclick="checkHealth()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="main">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+      <!-- Stats -->
+      <div class="panel">
+        <div class="panel-title">Corpus Stats</div>
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-box"><div class="stat-val" id="statTotal">—</div><div class="stat-label">Total</div></div>
+          <div class="stat-box"><div class="stat-val" id="statJudged">—</div><div class="stat-label">Judged</div></div>
+          <div class="stat-box"><div class="stat-val" id="statPending">—</div><div class="stat-label">Pending</div></div>
+          <div class="stat-box"><div class="stat-val" id="statConf">—</div><div class="stat-label">Avg Conf</div></div>
+        </div>
+      </div>
+
+      <!-- Generate form -->
+      <div class="panel">
+        <div class="panel-title">Generate Intelligence</div>
+
+        <div class="form-group">
+          <label class="form-label">Domain</label>
+          <div class="domain-tags">
+            <div class="domain-tag active" data-domain="macro" onclick="selectDomain(this)">Macro</div>
+            <div class="domain-tag" data-domain="defi" onclick="selectDomain(this)">DeFi</div>
+            <div class="domain-tag" data-domain="policy" onclick="selectDomain(this)">Policy</div>
+            <div class="domain-tag" data-domain="sentiment" onclick="selectDomain(this)">Sentiment</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Event Description</label>
+          <textarea class="form-input" id="eventDesc" rows="4" 
+            placeholder="Fed holds rates at 4.25%, signals 2 cuts in 2026. Risk-on sentiment expected..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Impact Score</label>
+          <div class="impact-display">
+            <input type="range" class="impact-slider" id="impactSlider" 
+              min="0" max="1" step="0.05" value="0.7"
+              oninput="document.getElementById('impactVal').textContent=parseFloat(this.value).toFixed(2)"/>
+            <div class="impact-val" id="impactVal">0.70</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Source</label>
+          <input class="form-input" id="eventSource" type="text" placeholder="FOMC / Bloomberg / Internal"/>
+        </div>
+
+        <button class="btn btn-primary" id="generateBtn" onclick="generateIntelligence()" style="width:100%">
+          Run Node Analysis
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('generate', this)">Intelligence</button>
+        <button class="tab" onclick="switchTab('digest', this)">Daily Digest</button>
+        <button class="tab" onclick="switchTab('corpus', this)">Corpus</button>
+        <button class="tab" onclick="switchTab('analytics', this)">Judge Analytics</button>
+        <button class="tab" onclick="switchTab('sentiment', this)">X Sentiment</button>
+        <button class="tab" onclick="switchTab('watchlist', this)">Watchlist</button>
+      </div>
+
+      <!-- Intelligence tab -->
+      <div class="tab-panel active" id="tab-generate">
+        <div class="output-panel">
+          <div class="output-header">
+            <div class="output-title">Node Output</div>
+            <div id="regimeBadge"></div>
+          </div>
+          <div class="output-body" id="outputBody">
+            <div class="output-empty">
+              <div class="output-empty-icon">⬡</div>
+              <div class="output-empty-text">
+                No intelligence generated yet.<br>
+                Configure an event and run Node analysis.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Digest tab -->
+      <div class="tab-panel" id="tab-digest">
+        <div class="output-panel">
+          <div class="digest-controls">
+            <div class="config-label">Hours</div>
+            <select class="form-select" id="digestHours" style="width:100px">
+              <option value="12">12h</option>
+              <option value="24" selected>24h</option>
+              <option value="48">48h</option>
+              <option value="168">7d</option>
+            </select>
+            <div class="config-label">Domain</div>
+            <select class="form-select" id="digestDomain" style="width:120px">
+              <option value="">All</option>
+              <option value="macro">Macro</option>
+              <option value="defi">DeFi</option>
+              <option value="policy">Policy</option>
+              <option value="sentiment">Sentiment</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadDigest()">Generate Brief</button>
+          </div>
+          <div class="digest-body" id="digestBody">
+            <div class="output-empty">
+              <div class="output-empty-icon">◈</div>
+              <div class="output-empty-text">
+                Generate a brief from judged corpus entries.<br>
+                Includes LP talking points and Base Layer topics.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corpus tab -->
+      <div class="tab-panel" id="tab-corpus">
+        <div class="output-panel">
+          <div class="output-header" style="flex-wrap:wrap;gap:8px">
+            <div class="output-title">Corpus Entries</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <input id="corpusSearchFilter" class="form-input" placeholder="Search token..." 
+                style="width:130px;font-size:11px" 
+                oninput="loadCorpus()"/>
+              <select id="corpusDomainFilter" class="form-select" style="width:110px;font-size:11px" onchange="loadCorpus()">
+                <option value="">All Domains</option>
+                <option value="macro">Macro</option>
+                <option value="defi">DeFi</option>
+                <option value="policy">Policy</option>
+                <option value="sentiment">Sentiment</option>
+              </select>
+              <select id="corpusJudgedFilter" class="form-select" style="width:110px;font-size:11px" onchange="loadCorpus()">
+                <option value="">All Entries</option>
+                <option value="true">Judged Only</option>
+                <option value="false">Unjudged Only</option>
+              </select>
+              <select id="corpusSortFilter" class="form-select" style="width:130px;font-size:11px" onchange="loadCorpus()">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="confidence">Highest Confidence</option>
+                <option value="score">Highest Score</option>
+              </select>
+              <span id="corpusPaginationInfo" style="font-size:10px;color:var(--text-dim);letter-spacing:0.08em"></span>
+              <button class="btn btn-ghost" id="corpusPrevBtn" onclick="corpusPageChange(-1)" style="font-size:10px;padding:3px 10px;display:none">← Prev</button>
+              <button class="btn btn-ghost" id="corpusNextBtn" onclick="corpusPageChange(1)" style="font-size:10px;padding:3px 10px;display:none">Next →</button>
+              <button class="btn btn-ghost" onclick="loadCorpus()">Refresh</button>
+            </div>
+          </div>
+          <div id="corpusBody">
+            <div class="output-empty">
+              <div class="output-empty-icon">◫</div>
+              <div class="output-empty-text">Click Refresh to load corpus entries.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Judge Analytics tab -->
+      <div class="tab-panel" id="tab-analytics">
+        <div class="output-panel">
+          <div class="output-header">
+            <div class="output-title">Judge Analytics</div>
+            <button class="run-btn" onclick="loadJudgeAnalytics()" style="padding:6px 16px;font-size:11px">Refresh</button>
+          </div>
+          <div class="output-body" id="analyticsBody">
+            <div class="output-empty">
+              <div class="output-empty-icon">⬡</div>
+              <div class="output-empty-text">Loading analytics...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- X Sentiment tab -->
+      <div class="tab-panel" id="tab-sentiment">
+        <div class="output-panel">
+          <div class="output-header">
+            <div class="output-title">X / Twitter Sentiment</div>
+          </div>
+          <div class="output-body" style="padding:20px">
+
+            <!-- Asset sentiment lookup -->
+            <div style="margin-bottom:24px">
+              <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Asset Sentiment</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input id="sentimentAsset" class="form-input" placeholder="e.g. SOL, BTC, ETH" style="width:140px" />
+                <input id="sentimentContext" class="form-input" placeholder="Optional context..." style="flex:1;min-width:200px" />
+                <button class="run-btn" onclick="loadSentiment()" style="padding:8px 20px">Get Sentiment</button>
+              </div>
+              <div id="sentimentResult" style="margin-top:16px"></div>
+            </div>
+
+            <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+
+            <!-- Price driver lookup -->
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Why Is It Moving?</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input id="driverAsset" class="form-input" placeholder="e.g. SOL" style="width:140px" />
+                <input id="driverChange" class="form-input" type="number" placeholder="% change (e.g. -8.5)" style="width:160px" />
+                <button class="run-btn" onclick="loadPriceDriver()" style="padding:8px 20px">Analyze Move</button>
+              </div>
+              <div id="driverResult" style="margin-top:16px"></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Watchlist tab -->
+      <div class="tab-panel" id="tab-watchlist">
+        <div class="output-panel">
+          <div class="output-header" style="flex-wrap:wrap;gap:8px">
+            <div class="output-title">Watchlist</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="watchlistJudgeLabel" style="font-size:10px;color:var(--text-dim);letter-spacing:0.1em"></span>
+              <input id="watchlistAddInput" class="form-input" placeholder="Add ticker... e.g. SOL" 
+                style="width:140px;font-size:11px" 
+                onkeydown="if(event.key==='Enter') addWatchlistToken()"/>
+              <button class="btn btn-primary" onclick="addWatchlistToken()" style="font-size:10px;padding:5px 12px">+ Add</button>
+              <button class="btn btn-ghost" onclick="loadWatchlist()" style="font-size:10px;padding:5px 12px">Refresh</button>
+            </div>
+          </div>
+
+          <!-- Token chips -->
+          <div id="watchlistChips" style="display:flex;flex-wrap:wrap;gap:8px;padding:14px 20px;border-bottom:1px solid var(--border);min-height:52px">
+            <div style="color:var(--text-dim);font-size:11px;align-self:center">No tokens yet — add a ticker above</div>
+          </div>
+
+          <!-- Token cards grid -->
+          <div id="watchlistCards" style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:20px">
+            <div class="output-empty" style="height:200px;grid-column:1/-1">
+              <div class="output-empty-icon">◈</div>
+              <div class="output-empty-text">Add tokens to your watchlist to see their health cards.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+  let selectedDomain = 'macro';
+
+  function getApiUrl() {
+    return document.getElementById('apiUrl').value.replace(/\/$/, '');
+  }
+
+  function selectDomain(el) {
+    document.querySelectorAll('.domain-tag').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    selectedDomain = el.dataset.domain;
+  }
+
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'watchlist') loadWatchlist();
+    if (name === 'corpus') loadCorpus();
+    if (name === 'analytics') loadJudgeAnalytics();
+  }
+
+  // ── Watchlist ────────────────────────────────────────────────────────────
+
+  let watchlistTokens = [];
+
+  async function loadWatchlist() {
+    if (!currentJudgeName) { showJudgeSelector(); return; }
+    document.getElementById('watchlistJudgeLabel').textContent = `${currentJudgeName}'s watchlist`;
+    try {
+      const res = await fetch(`${getApiUrl()}/watchlist/${currentJudgeName}`);
+      const data = await res.json();
+      watchlistTokens = data.tokens.map(t => t.symbol);
+      renderWatchlistChips();
+      renderWatchlistCards();
+    } catch(e) {
+      document.getElementById('watchlistCards').innerHTML =
+        `<div class="error-msg" style="grid-column:1/-1">Error loading watchlist: ${e.message}</div>`;
+    }
+  }
+
+  function renderWatchlistChips() {
+    const el = document.getElementById('watchlistChips');
+    if (!watchlistTokens.length) {
+      el.innerHTML = `<div style="color:var(--text-dim);font-size:11px;align-self:center">No tokens yet — add a ticker above</div>`;
+      return;
+    }
+    el.innerHTML = watchlistTokens.map(sym => `
+      <div style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--accent);
+                  padding:4px 10px;font-size:11px;color:var(--accent);letter-spacing:0.1em">
+        ${sym}
+        <span onclick="removeWatchlistToken('${sym}')" 
+              style="cursor:pointer;color:var(--text-dim);font-size:13px;line-height:1;margin-left:2px"
+              title="Remove">×</span>
+      </div>`).join('');
+  }
+
+  async function addWatchlistToken() {
+    const input = document.getElementById('watchlistAddInput');
+    const sym = input.value.trim().toUpperCase();
+    if (!sym || !currentJudgeName) return;
+    if (watchlistTokens.includes(sym)) { input.value = ''; return; }
+    try {
+      await fetch(`${getApiUrl()}/watchlist/${currentJudgeName}/add?token_symbol=${sym}`, { method: 'POST' });
+      watchlistTokens.push(sym);
+      input.value = '';
+      renderWatchlistChips();
+      // Load card for new token
+      loadTokenCard(sym);
+    } catch(e) { alert(`Error adding ${sym}: ${e.message}`); }
+  }
+
+  async function removeWatchlistToken(sym) {
+    if (!currentJudgeName) return;
+    try {
+      await fetch(`${getApiUrl()}/watchlist/${currentJudgeName}/remove/${sym}`, { method: 'DELETE' });
+      watchlistTokens = watchlistTokens.filter(t => t !== sym);
+      renderWatchlistChips();
+      const card = document.getElementById(`wcard_${sym}`);
+      if (card) card.remove();
+      if (!watchlistTokens.length) {
+        document.getElementById('watchlistCards').innerHTML = `
+          <div class="output-empty" style="height:200px;grid-column:1/-1">
+            <div class="output-empty-icon">◈</div>
+            <div class="output-empty-text">Add tokens to your watchlist to see their health cards.</div>
+          </div>`;
+      }
+    } catch(e) { alert(`Error removing ${sym}: ${e.message}`); }
+  }
+
+  async function renderWatchlistCards() {
+    const grid = document.getElementById('watchlistCards');
+    if (!watchlistTokens.length) {
+      grid.innerHTML = `
+        <div class="output-empty" style="height:200px;grid-column:1/-1">
+          <div class="output-empty-icon">◈</div>
+          <div class="output-empty-text">Add tokens to your watchlist to see their health cards.</div>
+        </div>`;
+      return;
+    }
+    // Render skeleton cards first
+    grid.innerHTML = watchlistTokens.map(sym => `
+      <div id="wcard_${sym}" style="background:var(--surface);border:1px solid var(--border)">
+        <div style="padding:16px 20px;display:flex;align-items:center;gap:10px">
+          <div class="spinner"></div>
+          <div style="font-size:12px;color:var(--text-dim)">Loading ${sym}...</div>
+        </div>
+      </div>`).join('');
+    // Load each card
+    for (const sym of watchlistTokens) {
+      loadTokenCard(sym);
+    }
+  }
+
+  async function loadTokenCard(sym) {
+    let cardEl = document.getElementById(`wcard_${sym}`);
+    if (!cardEl) {
+      // Card doesn't exist yet — create it
+      const grid = document.getElementById('watchlistCards');
+      // Remove empty state if present
+      const empty = grid.querySelector('.output-empty');
+      if (empty) empty.closest('div[style*="grid-column"]')?.remove();
+      cardEl = document.createElement('div');
+      cardEl.id = `wcard_${sym}`;
+      cardEl.style.cssText = 'background:var(--surface);border:1px solid var(--border)';
+      cardEl.innerHTML = `<div style="padding:16px 20px;display:flex;align-items:center;gap:10px"><div class="spinner"></div><div style="font-size:12px;color:var(--text-dim)">Loading ${sym}...</div></div>`;
+      grid.appendChild(cardEl);
+    }
+    try {
+      const res = await fetch(`${getApiUrl()}/watchlist/${currentJudgeName}/feed/${sym}`);
+      const data = await res.json();
+      if (data.status !== 'ok') throw new Error(data.detail || 'Unknown error');
+      cardEl.outerHTML = buildTokenCard(data);
+      // Re-query since outerHTML replaces the element
+      const newCard = document.getElementById(`wcard_${sym}`);
+      if (newCard) attachChartIfExpanded(newCard, data);
+    } catch(e) {
+      if (cardEl) cardEl.innerHTML = `<div class="error-msg" style="margin:0">Error loading ${sym}: ${e.message}</div>`;
+    }
+  }
+
+  function buildTokenCard(data) {
+    const sym = data.symbol;
+    const n = data.narrative;
+    const c = data.conviction;
+    const corp = data.corpus;
+
+    // Health color based on conviction
+    const score = c.avg_score;
+    const edgeColor = !score ? 'var(--border)' :
+                      score >= 4.0 ? 'var(--bull)' :
+                      score >= 2.5 ? 'var(--warn)' : 'var(--bear)';
+
+    const narrativeLabel = n.label ?
+      `<span style="color:${n.label.includes('bull') ? 'var(--bull)' : n.label.includes('bear') ? 'var(--bear)' : 'var(--warn)'}">
+        ${n.label.charAt(0).toUpperCase() + n.label.slice(1)} ${n.label.includes('bull') ? '↑' : n.label.includes('bear') ? '↓' : '→'}
+      </span>` : '<span style="color:var(--text-dim)">No data</span>';
+
+    const convictionDisplay = score ?
+      `<span style="color:${edgeColor};font-family:\'Syne\',sans-serif;font-size:18px;font-weight:700">${score}</span>
+       <span style="color:var(--text-dim);font-size:10px">/5 · ${c.judge_count} judge${c.judge_count !== 1 ? 's' : ''}</span>` :
+      '<span style="color:var(--text-dim);font-size:11px">No judgments yet</span>';
+
+    const stanceDisplay = corp.unreviewed_by_judge > 0 ?
+      `<span style="color:var(--warn)">${corp.unreviewed_by_judge} unreviewed</span>
+       <button class="btn btn-ghost" onclick="reviewTokenInCorpus('${sym}')"
+               style="font-size:9px;padding:2px 8px;margin-left:6px">Review →</button>` :
+      '<span style="color:var(--bull)">All reviewed ✓</span>';
+
+    // Dominant story
+    const storyText = n.dominant_narratives?.length ?
+      n.dominant_narratives.slice(0, 2).join(' · ') : (n.summary || 'No narrative data yet');
+
+    const lastUpdated = n.last_updated ?
+      `Updated ${new Date(n.last_updated).toLocaleDateString()}` : '';
+
+    // Bias breakdown
+    const biasHtml = Object.keys(c.bias_breakdown || {}).length ?
+      Object.entries(c.bias_breakdown).map(([tag, count]) =>
+        `<span style="background:var(--surface2);border:1px solid var(--border);
+                      padding:2px 8px;font-size:9px;color:var(--text-dim);letter-spacing:0.08em">
+          ${tag} (${count})
+        </span>`).join('') :
+      '<span style="color:var(--text-dim);font-size:10px">No bias data yet</span>';
+
+    // Carry-on items inline
+    const carryonItems = corp.events.filter(e => e.type === 'carryon').slice(0, 3);
+    const carryonHtml = carryonItems.length ? carryonItems.map(e => {
+      const dirColor = e.impact_direction === 'positive' ? 'var(--bull)' :
+                       e.impact_direction === 'negative' ? 'var(--bear)' : 'var(--text-dim)';
+      const dirArrow = e.impact_direction === 'positive' ? '▲' :
+                       e.impact_direction === 'negative' ? '▼' : '—';
+      return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;
+                          border-bottom:1px solid var(--border)">
+        <span style="color:${dirColor};font-size:10px;margin-top:1px">${dirArrow}</span>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text);line-height:1.4">${e.description}</div>
+          ${e.mechanism ? `<div style="font-size:9px;color:${dirColor};margin-top:2px;opacity:0.8">→ ${e.mechanism}</div>` : ''}
+        </div>
+        <span style="font-size:9px;color:var(--text-dim);white-space:nowrap">
+          ${new Date(e.created_at).toLocaleDateString()}
+        </span>
+      </div>`;
+    }).join('') : '<div style="color:var(--text-dim);font-size:10px">No carry-on impacts found</div>';
+
+    // Story timeline (direct hits)
+    const directItems = corp.events.filter(e => e.type === 'direct').slice(0, 5);
+    const timelineHtml = directItems.length ? directItems.map(e => {
+      const scoreColor = !e.avg_score ? 'var(--text-dim)' :
+                         e.avg_score >= 4 ? 'var(--bull)' :
+                         e.avg_score >= 2.5 ? 'var(--warn)' : 'var(--bear)';
+      return `<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;
+                          border-bottom:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:48px">
+          ${new Date(e.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+        </div>
+        <div style="flex:1;font-size:10px;color:var(--text);line-height:1.4">${e.description}</div>
+        <div style="text-align:right;min-width:60px">
+          ${e.avg_score ? `<div style="font-size:11px;font-weight:600;color:${scoreColor}">${parseFloat(e.avg_score).toFixed(1)}</div>` : ''}
+          <div style="font-size:9px;color:var(--text-dim)">${e.judgment_count} judge${e.judgment_count !== 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+    }).join('') : '<div style="color:var(--text-dim);font-size:10px">No direct entries yet</div>';
+
+    return `
+    <div id="wcard_${sym}" style="background:var(--surface);border:1px solid var(--border);
+                                   border-left:3px solid ${edgeColor}">
+      <!-- Card header -->
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);
+                  display:flex;justify-content:space-between;align-items:center">
+        <div style="font-family:\'Syne\',sans-serif;font-size:18px;font-weight:700;
+                    letter-spacing:0.1em;color:var(--text)">${sym}</div>
+        <span onclick="removeWatchlistToken('${sym}')"
+              style="cursor:pointer;color:var(--text-dim);font-size:13px" title="Remove">× remove</span>
+      </div>
+
+      <!-- Three-column health summary -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--border)">
+        <div style="padding:14px 16px;border-right:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;
+                      text-transform:uppercase;margin-bottom:6px">Narrative</div>
+          <div style="font-size:13px">${narrativeLabel}</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:3px">${lastUpdated}</div>
+        </div>
+        <div style="padding:14px 16px;border-right:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;
+                      text-transform:uppercase;margin-bottom:6px">Team Conviction</div>
+          <div>${convictionDisplay}</div>
+        </div>
+        <div style="padding:14px 16px">
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;
+                      text-transform:uppercase;margin-bottom:6px">Your Stance</div>
+          <div style="font-size:11px">${stanceDisplay}</div>
+        </div>
+      </div>
+
+      <!-- Dominant story -->
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);
+                  background:var(--surface2)">
+        <div style="font-size:9px;color:var(--accent);letter-spacing:0.15em;
+                    text-transform:uppercase;margin-bottom:5px">Dominant Story</div>
+        <div style="font-size:11px;color:var(--text);line-height:1.6">${storyText}</div>
+      </div>
+
+      <!-- Bias breakdown -->
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);
+                  display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.12em;
+                    text-transform:uppercase;margin-right:4px">Bias</div>
+        ${biasHtml}
+      </div>
+
+      <!-- Corpus hit counts -->
+      <div style="padding:10px 20px;border-bottom:1px solid var(--border);
+                  display:flex;gap:20px">
+        <div style="font-size:10px;color:var(--text-dim)">
+          Direct hits: <span style="color:var(--accent)">${corp.direct_count}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim)">
+          Carry-on impacts: <span style="color:var(--accent)">${corp.carryon_count}</span>
+        </div>
+      </div>
+
+      <!-- Carry-on section (inline) -->
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;
+                    text-transform:uppercase;margin-bottom:10px">Carry-on Impact</div>
+        ${carryonHtml}
+      </div>
+
+      <!-- Expand toggle for chart + full timeline -->
+      <div style="padding:10px 20px;cursor:pointer;display:flex;align-items:center;gap:8px;
+                  color:var(--text-dim);font-size:10px;letter-spacing:0.1em;text-transform:uppercase"
+           onclick="toggleCardExpand('${sym}', this)">
+        <span id="wexpand_arrow_${sym}" style="color:var(--accent);transition:transform 0.2s">▶</span>
+        Price & Story Map · Story Timeline
+      </div>
+
+      <!-- Expandable section -->
+      <div id="wexpand_${sym}" style="display:none;border-top:1px solid var(--border)">
+
+        <!-- Price chart -->
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;text-transform:uppercase">90-Day Price · Story Pins</div>
+            <div class="wchart-controls" style="display:flex;gap:4px">
+              ${['90d','180d','365d'].map((label, i) => {
+                const daysVal = [90,180,365][i];
+                return `<button onclick="changeChartDays('${sym}', ${daysVal}, this)"
+                  style="background:none;border:1px solid ${i===0?'var(--accent)':'var(--border)'};
+                         color:${i===0?'var(--accent)':'var(--text-dim)'};
+                         font-size:9px;padding:2px 7px;cursor:pointer;
+                         font-family:\'JetBrains Mono\',monospace;letter-spacing:0.08em">${label}</button>`;
+              }).join('')}
+            </div>
+          </div>
+          <div id="wchart_${sym}" style="position:relative;height:140px;width:100%">
+            <canvas id="wcanvas_${sym}" style="width:100%;height:100%"></canvas>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:8px">
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-dim)">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--bull);border:1px solid var(--bull)"></div>
+              Direct story
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-dim)">
+              <div style="width:8px;height:8px;border-radius:50%;background:transparent;border:2px solid var(--accent)"></div>
+              Carry-on impact
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-dim)">
+              <div style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></div>
+              High conviction (4+)
+            </div>
+          </div>
+        </div>
+
+        <!-- Full story timeline -->
+        <div style="padding:16px 20px">
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;
+                      text-transform:uppercase;margin-bottom:10px">Story Timeline</div>
+          ${timelineHtml}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function reviewTokenInCorpus(sym) {
+    // Switch to corpus tab
+    const corpusTabBtn = document.querySelector('.tab:nth-child(3)');
+    switchTab('corpus', corpusTabBtn);
+    // Pre-fill search and filter to unjudged
+    const searchEl = document.getElementById('corpusSearchFilter');
+    const judgedEl = document.getElementById('corpusJudgedFilter');
+    if (searchEl) searchEl.value = sym;
+    if (judgedEl) judgedEl.value = 'false';
+    loadCorpus();
+  }
+
+  async function changeChartDays(sym, days, btn) {
+    // Update button states
+    btn.closest('.wchart-controls').querySelectorAll('button').forEach(b => {
+      b.style.color = 'var(--text-dim)';
+      b.style.borderColor = 'var(--border)';
+    });
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    // Fetch new data
+    try {
+      const res = await fetch(`${getApiUrl()}/watchlist/${currentJudgeName}/feed/${sym}?days=${days}`);
+      const data = await res.json();
+      const cardEl = document.getElementById(`wcard_${sym}`);
+      if (cardEl) {
+        cardEl._chartData = data;
+        requestAnimationFrame(() => requestAnimationFrame(() => drawPriceChart(sym, data)));
+      }
+    } catch(e) { console.error('Chart reload failed:', e); }
+  }
+
+  function toggleCardExpand(sym, headerEl) {
+    const panel = document.getElementById(`wexpand_${sym}`);
+    const arrow = document.getElementById(`wexpand_arrow_${sym}`);
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : 'block';
+    arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+    if (!isOpen) {
+      // Wait two frames so canvas has real dimensions before drawing
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const cardEl = document.getElementById(`wcard_${sym}`);
+        if (cardEl && cardEl._chartData) drawPriceChart(sym, cardEl._chartData);
+      }));
+    }
+  }
+
+  function attachChartIfExpanded(cardEl, data) {
+    // Store chart data on the card element for later use
+    cardEl._chartData = data;
+  }
+
+  function drawPriceChart(sym, data) {
+    const canvas = document.getElementById(`wcanvas_${sym}`);
+    if (!canvas) return;
+    const prices = data.price_chart || [];
+    const events = data.corpus?.events || [];
+    if (!prices.length) {
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      ctx.fillStyle = 'var(--text-dim)';
+      ctx.font = '11px JetBrains Mono';
+      ctx.fillText('No price data available', 20, canvas.height / 2);
+      return;
+    }
+
+    canvas.width = canvas.offsetWidth || 600;
+    canvas.height = canvas.offsetHeight || 140;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const pad = { top: 10, right: 20, bottom: 24, left: 50 };
+
+    const vals = prices.map(p => p[1]);
+    const minP = Math.min(...vals), maxP = Math.max(...vals);
+    const range = maxP - minP || 1;
+
+    const toX = ts => pad.left + ((ts - prices[0][0]) / (prices[prices.length-1][0] - prices[0][0])) * (W - pad.left - pad.right);
+    const toY = v => pad.top + (1 - (v - minP) / range) * (H - pad.top - pad.bottom);
+
+    // Price line
+    ctx.beginPath();
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth = 1.5;
+    prices.forEach((p, i) => {
+      const x = toX(p[0]), y = toY(p[1]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Fill under line
+    ctx.beginPath();
+    prices.forEach((p, i) => {
+      const x = toX(p[0]), y = toY(p[1]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(toX(prices[prices.length-1][0]), H - pad.bottom);
+    ctx.lineTo(toX(prices[0][0]), H - pad.bottom);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,212,255,0.06)';
+    ctx.fill();
+
+    // Y axis labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'right';
+    [0, 0.5, 1].forEach(pct => {
+      const v = minP + pct * range;
+      const y = toY(v);
+      ctx.fillText('$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(v < 1 ? 4 : 0)), pad.left - 4, y + 3);
+    });
+
+    // Story dots
+    events.forEach(e => {
+      const ts = new Date(e.created_at).getTime();
+      if (ts < prices[0][0] || ts > prices[prices.length-1][0]) return;
+      // Find nearest price
+      const nearest = prices.reduce((a, b) => Math.abs(b[0] - ts) < Math.abs(a[0] - ts) ? b : a);
+      const x = toX(nearest[0]), y = toY(nearest[1]);
+      const isHighConv = e.avg_score && e.avg_score >= 4;
+      const isDirect = e.type === 'direct';
+      const dotColor = e.impact_direction === 'positive' ? '#10b981' :
+                       e.impact_direction === 'negative' ? '#ef4444' :
+                       isDirect ? '#10b981' : '#00d4ff';
+      ctx.beginPath();
+      ctx.arc(x, y - 8, isHighConv ? 5 : 4, 0, Math.PI * 2);
+      if (isDirect) {
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = dotColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    });
+
+    // X axis date labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'center';
+    [0, 0.5, 1].forEach(pct => {
+      const idx = Math.floor(pct * (prices.length - 1));
+      const d = new Date(prices[idx][0]);
+      const x = toX(prices[idx][0]);
+      ctx.fillText(`${d.getMonth()+1}/${d.getDate()}`, x, H - 6);
+    });
+  }
+
+  async function checkHealth() {
+    const statusEl = document.getElementById('statusText');
+    statusEl.textContent = 'CONNECTING...';
+    try {
+      const res = await fetch(getApiUrl() + '/health');
+      const data = await res.json();
+      statusEl.textContent = data.db_connected ? 'ONLINE — DB CONNECTED' : 'ONLINE — DB DISCONNECTED';
+      loadStats();
+    } catch(e) {
+      statusEl.textContent = 'OFFLINE';
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await fetch(getApiUrl() + '/stats');
+      const data = await res.json();
+      const c = data.corpus;
+      document.getElementById('statTotal').textContent = c.total || '0';
+      document.getElementById('statJudged').textContent = c.judged || '0';
+      document.getElementById('statPending').textContent = c.pending_judgment || '0';
+      document.getElementById('statConf').textContent = c.avg_confidence ? parseFloat(c.avg_confidence).toFixed(2) : '—';
+    } catch(e) {}
+  }
+
+  async function generateIntelligence() {
+    const desc = document.getElementById('eventDesc').value.trim();
+    if (!desc) { alert('Enter an event description'); return; }
+
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Synchronizing...';
+
+    document.getElementById('outputBody').innerHTML = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Node analysis in progress...</div>
+      </div>`;
+    document.getElementById('regimeBadge').innerHTML = '';
+
+    try {
+      const res = await fetch(getApiUrl() + '/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: desc,
+          impact: parseFloat(document.getElementById('impactSlider').value),
+          domain: selectedDomain,
+          source: document.getElementById('eventSource').value || 'manual'
+        })
+      });
+      const data = await res.json();
+
+      if (data.status === 'error' || !data.intelligence) {
+        throw new Error(data.detail || data.error || 'Unknown error');
+      }
+
+      renderIntelligence(data);
+      loadStats();
+      // Auto-refresh corpus so new entry is immediately judgeable
+      loadCorpus();
+    } catch(e) {
+      document.getElementById('outputBody').innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run Node Analysis';
+    }
+  }
+
+  function renderIntelligence(data) {
+    const intel = data.intelligence;
+    const regime = intel.market_regime || 'neutral';
+
+    // Regime badge
+    document.getElementById('regimeBadge').innerHTML = 
+      `<div class="regime-badge regime-${regime}">${regime}</div>`;
+
+    // Confidence bar
+    const conf = parseFloat(intel.confidence || 0);
+
+    // Chain of thought
+    const cotHtml = (intel.chain_of_thought || []).map((step, i) => `
+      <div class="cot-step">
+        <div class="cot-num">0${i+1}</div>
+        <div class="cot-text">${step}</div>
+      </div>`).join('');
+
+    // Scenarios
+    const scenHtml = (intel.scenarios || []).map(s => `
+      <div class="scenario">
+        <div>
+          <div class="scenario-outcome">${s.outcome}</div>
+          <div class="scenario-rationale">${s.rationale}</div>
+        </div>
+        <div>
+          <div class="scenario-prob">${Math.round((s.probability||0)*100)}%</div>
+          <div class="scenario-prob-label">prob</div>
+        </div>
+      </div>`).join('');
+
+    // Citations
+    const citHtml = (intel.citations || []).map(c => 
+      `<span style="color:var(--text-dim);font-size:10px;margin-right:12px">↗ ${c}</span>`).join('');
+
+    document.getElementById('outputBody').innerHTML = `
+      <div class="intel-section" style="animation-delay:0s">
+        <div class="intel-section-label">Confidence</div>
+        <div style="color:var(--accent);font-family:'Syne',sans-serif;font-size:20px;font-weight:700">${(conf*100).toFixed(0)}%</div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width:${conf*100}%"></div></div>
+        <div style="color:var(--text-dim);font-size:10px;margin-top:6px">Event ID: ${data.event_id} · Domain: ${data.domain}</div>
+      </div>
+
+      <div class="intel-section" style="animation-delay:0.05s">
+        <div class="intel-section-label">Chain of Thought</div>
+        <div class="chain-of-thought">${cotHtml || '<div class="cot-text" style="color:var(--text-dim)">No reasoning chain returned.</div>'}</div>
+      </div>
+
+      <div class="intel-section" style="animation-delay:0.1s">
+        <div class="intel-section-label">Scenarios</div>
+        <div class="scenarios">${scenHtml || '<div style="color:var(--text-dim);font-size:12px">No scenarios returned.</div>'}</div>
+      </div>
+
+      <div class="intel-section" style="animation-delay:0.15s">
+        <div class="intel-section-label">Recommendation</div>
+        <div class="recommendation-box">${intel.recommendation || 'No recommendation.'}</div>
+      </div>
+
+      ${citHtml ? `<div class="intel-section" style="animation-delay:0.2s">
+        <div class="intel-section-label">Citations</div>
+        <div>${citHtml}</div>
+      </div>` : ''}
+    `;
+  }
+
+  async function loadDigest() {
+    const hours = document.getElementById('digestHours').value;
+    const domain = document.getElementById('digestDomain').value;
+    const body = document.getElementById('digestBody');
+
+    body.innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Synthesizing brief...</div></div>`;
+
+    try {
+      let url = `${getApiUrl()}/digest?hours=${hours}`;
+      if (domain) url += `&domain=${domain}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.status === 'empty') {
+        body.innerHTML = `<div class="output-empty" style="height:200px">
+          <div class="output-empty-icon">◌</div>
+          <div class="output-empty-text">No judged corpus entries in the last ${hours} hours.<br>Generate and judge some intelligence first.</div>
+        </div>`;
+        return;
+      }
+
+      if (!data.brief) {
+        body.innerHTML = `<div class="error-msg" style="padding:20px">API Error: ${data.detail || JSON.stringify(data)}</div>`;
+        return;
+      }
+      const b = data.brief;
+      const regime = b.overall_regime || 'neutral';
+
+      const themesHtml = (b.key_themes || []).map(t => `
+        <div class="theme-card">
+          <div class="theme-name">${t.theme}</div>
+          <div class="theme-signal signal-${t.signal_strength}">${t.signal_strength}</div>
+          <div class="theme-summary">${t.summary}</div>
+        </div>`).join('');
+
+      const tpHtml = (b.lp_talking_points || []).map(tp => `
+        <div class="talking-point">
+          <div class="tp-bullet">›</div>
+          <div class="tp-text">${tp}</div>
+        </div>`).join('');
+
+      const topicsHtml = (b.base_layer_topics || []).map(t => 
+        `<div class="podcast-topic">⬡ ${t}</div>`).join('');
+
+      const risksHtml = (b.risks || []).map(r => `
+        <div class="risk-item risk-${r.severity}">
+          <div>
+            <div class="risk-text">${r.risk}</div>
+            <div class="risk-domain">${r.domain}</div>
+          </div>
+          <div class="risk-severity sev-${r.severity}">${r.severity}</div>
+        </div>`).join('');
+
+      const recsHtml = (b.top_recommendations || []).map((r,i) => `
+        <div class="talking-point">
+          <div class="tp-bullet" style="color:var(--accent)">${i+1}</div>
+          <div>
+            <div class="tp-text">${r.action}</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${r.rationale}</div>
+          </div>
+        </div>`).join('');
+
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700">${b.date} · ${hours}h Brief</div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="regime-badge regime-${regime}">${regime}</div>
+            <div style="font-size:10px;color:var(--text-dim)">${data.source_entries} entries</div>
+          </div>
+        </div>
+
+        <div class="digest-section">
+          <div class="intel-section-label">Executive Summary</div>
+          <div class="digest-summary">${b.executive_summary}</div>
+        </div>
+
+        ${themesHtml ? `<div class="digest-section">
+          <div class="intel-section-label">Key Themes</div>
+          <div class="themes-grid">${themesHtml}</div>
+        </div>` : ''}
+
+        ${recsHtml ? `<div class="digest-section">
+          <div class="intel-section-label">Top Recommendations</div>
+          <div class="talking-points">${recsHtml}</div>
+        </div>` : ''}
+
+        ${risksHtml ? `<div class="digest-section">
+          <div class="intel-section-label">Risk Register</div>
+          <div class="risks-list">${risksHtml}</div>
+        </div>` : ''}
+
+        ${tpHtml ? `<div class="digest-section">
+          <div class="intel-section-label">LP Talking Points</div>
+          <div class="talking-points">${tpHtml}</div>
+        </div>` : ''}
+
+        ${topicsHtml ? `<div class="digest-section">
+          <div class="intel-section-label">Base Layer Topics</div>
+          <div class="podcast-topics">${topicsHtml}</div>
+        </div>` : ''}
+
+        <div style="font-size:10px;color:var(--text-dim);margin-top:8px;letter-spacing:0.1em">
+          Generated ${new Date(data.generated_at).toLocaleString()} · ${data.source_entries} source entries
+        </div>
+      `;
+    } catch(e) {
+      body.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    }
+  }
+
+  let corpusEntries = {};
+
+  const CORPUS_PAGE_SIZE = 20;
+  let corpusOffset = 0;
+  let corpusTotal = 0;
+
+  function corpusPageChange(dir) {
+    const newOffset = corpusOffset + (dir * CORPUS_PAGE_SIZE);
+    if (newOffset < 0 || newOffset >= corpusTotal) return;
+    corpusOffset = newOffset;
+    loadCorpus(false);
+  }
+
+  async function loadCorpus(resetPage = true) {
+    if (resetPage) corpusOffset = 0;
+    const body = document.getElementById('corpusBody');
+    body.innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Loading corpus...</div></div>`;
+    try {
+      const domainFilter = document.getElementById('corpusDomainFilter')?.value || '';
+      const judgedFilter = document.getElementById('corpusJudgedFilter')?.value || '';
+      const sortFilter = document.getElementById('corpusSortFilter')?.value || 'newest';
+      const searchFilter = document.getElementById('corpusSearchFilter')?.value?.trim() || '';
+      let corpusUrl = getApiUrl() + `/corpus?limit=${CORPUS_PAGE_SIZE}&offset=${corpusOffset}`;
+      if (domainFilter) corpusUrl += `&domain=${domainFilter}`;
+      if (judgedFilter !== '') corpusUrl += `&judged=${judgedFilter}`;
+      corpusUrl += `&sort=${sortFilter}`;
+      if (searchFilter) corpusUrl += `&search=${encodeURIComponent(searchFilter)}`;
+      const res = await fetch(corpusUrl);
+      const data = await res.json();
+      corpusTotal = data.total || 0;
+
+      // Update pagination controls
+      const totalPages = Math.ceil(corpusTotal / CORPUS_PAGE_SIZE);
+      const currentPage = Math.floor(corpusOffset / CORPUS_PAGE_SIZE) + 1;
+      const infoEl = document.getElementById('corpusPaginationInfo');
+      const prevBtn = document.getElementById('corpusPrevBtn');
+      const nextBtn = document.getElementById('corpusNextBtn');
+      if (corpusTotal > CORPUS_PAGE_SIZE) {
+        infoEl.textContent = `Page ${currentPage} of ${totalPages} (${corpusTotal} total)`;
+        prevBtn.style.display = corpusOffset > 0 ? 'inline-block' : 'none';
+        nextBtn.style.display = corpusOffset + CORPUS_PAGE_SIZE < corpusTotal ? 'inline-block' : 'none';
+      } else {
+        infoEl.textContent = corpusTotal > 0 ? `${corpusTotal} entries` : '';
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+      }
+      if (!data.entries || data.entries.length === 0) {
+        body.innerHTML = `<div class="output-empty" style="height:200px">
+          <div class="output-empty-text">No corpus entries yet. Generate some intelligence first.</div></div>`;
+        return;
+      }
+      // Store entries by event_id for reliable lookup
+      corpusEntries = {};
+      data.entries.forEach(e => { corpusEntries[e.event_id] = e; });
+
+      const rows = data.entries.map(e => {
+        const intel = typeof e.intelligence === 'string' ? JSON.parse(e.intelligence) : (e.intelligence || {});
+        const regime = intel.market_regime || 'neutral';
+        const cot = (intel.chain_of_thought || []).map((s,i) => 
+          `<div class="cot-step"><div class="cot-num">0${i+1}</div><div class="cot-text">${s}</div></div>`).join('');
+        const scenarios = (intel.scenarios || []).map(s => `
+          <div class="scenario" style="margin-bottom:6px">
+            <div><div class="scenario-outcome">${s.outcome}</div>
+            <div class="scenario-rationale">${s.rationale}</div></div>
+            <div><div class="scenario-prob">${Math.round((s.probability||0)*100)}%</div></div>
+          </div>`).join('');
+        const rec = intel.recommendation || '';
+
+        return `
+        <tr class="corpus-row expand-trigger" data-id="${e.event_id}" style="cursor:pointer">
+          <td style="color:var(--text-dim);font-size:10px;white-space:nowrap">
+            <span class="expand-arrow" style="color:var(--accent);margin-right:6px;display:inline-block;transition:transform 0.2s">▶</span>
+            ${e.event_id}
+          </td>
+          <td style="max-width:260px;line-height:1.5"><span id="desc_${e.event_id}">${e.description}</span></td>
+          <td><div class="domain-tag active" style="cursor:default;display:inline-block">${e.domain}</div></td>
+          <td class="conf-val">${parseFloat(e.confidence||0).toFixed(2)}</td>
+          <td class="${e.judged ? 'judged-yes' : 'judged-no'}">${e.judged ? `✓ ${e.judgment_count > 1 ? e.judgment_count + ' judges' : 'judged'}` : 'pending'}</td>
+          <td style="color:var(--text-dim);font-size:10px;white-space:nowrap">${new Date(e.created_at).toLocaleDateString()}</td>
+          <td onclick="event.stopPropagation()">
+            <button class="btn btn-ghost judge-btn" style="font-size:10px;padding:4px 10px" data-id="${e.event_id}">${e.judged ? '+ Re-judge' : 'Judge'}</button>
+          </td>
+        </tr>
+        <tr class="expand-panel" id="expand_${e.event_id}" style="display:none">
+          <td colspan="7" style="padding:0;background:var(--surface2);border-bottom:1px solid var(--border)">
+            <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+              
+              <div>
+                <div class="intel-section-label" style="margin-bottom:8px">Chain of Thought</div>
+                <div class="chain-of-thought">${cot || '<div style="color:var(--text-dim);font-size:11px">None</div>'}</div>
+              </div>
+
+              <div>
+                <div class="intel-section-label" style="margin-bottom:8px">Scenarios</div>
+                ${scenarios || '<div style="color:var(--text-dim);font-size:11px">None</div>'}
+              </div>
+
+              <div>
+                <div class="intel-section-label" style="margin-bottom:8px">Regime & Recommendation</div>
+                <div class="regime-badge regime-${regime}" style="display:inline-block;margin-bottom:10px">${regime}</div>
+                <div class="recommendation-box" style="font-size:11px">${rec || 'No recommendation.'}</div>
+                ${intel.citations?.length ? `
+                <div style="margin-top:10px">
+                  <div class="intel-section-label" style="margin-bottom:4px">Citations</div>
+                  ${(intel.citations||[]).map(c => `<div style="color:var(--text-dim);font-size:10px">↗ ${c}</div>`).join('')}
+                </div>` : ''}
+              </div>
+
+            </div>
+
+            <!-- Portfolio Impact Section -->
+            <div style="border-top:1px solid var(--border);padding:16px 20px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <div class="intel-section-label" style="margin-bottom:0">Portfolio Impact — Top 100 Tokens</div>
+                <button class="btn btn-ghost portfolio-impact-btn" style="font-size:10px;padding:4px 12px" data-id="${e.event_id}">
+                  ⬡ Analyze Impact
+                </button>
+              </div>
+              <div id="portfolio_${e.event_id}" style="color:var(--text-dim);font-size:11px">
+                Click "Analyze Impact" to see which of the top 100 tokens are affected by this event.
+              </div>
+            </div>
+
+          </td>
+        </tr>`;
+      }).join('');
+
+      body.innerHTML = `
+        <table class="corpus-table">
+          <thead>
+            <tr>
+              <th>Event ID</th><th>Description</th><th>Domain</th>
+              <th>Confidence</th><th>Status</th><th>Date</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+
+      // Expand/collapse row on click
+      document.querySelectorAll('.expand-trigger').forEach(row => {
+        row.addEventListener('click', () => {
+          const id = row.dataset.id;
+          const panel = document.getElementById(`expand_${id}`);
+          const arrow = row.querySelector('.expand-arrow');
+          const isOpen = panel.style.display !== 'none';
+          panel.style.display = isOpen ? 'none' : 'table-row';
+          arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+        });
+      });
+
+      // Attach portfolio impact button handlers
+      document.querySelectorAll('.portfolio-impact-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          runPortfolioImpact(btn.dataset.id, btn);
+        });
+      });
+
+      // Attach judge button handlers
+      document.querySelectorAll('.judge-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          const descEl = document.getElementById(`desc_${id}`);
+          const desc = descEl ? descEl.textContent : id;
+          openJudge(id, desc);
+        });
+      });
+
+    } catch(e) {
+      body.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    }
+  }
+
+  // Judge modal
+  let currentJudgeId = null;
+
+  async function runPortfolioImpact(eventId, btn) {
+    const container = document.getElementById(`portfolio_${eventId}`);
+    if (!container) return;
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    container.innerHTML = `<div class="loading" style="height:60px"><div class="spinner"></div><div class="loading-text">Running portfolio impact analysis...</div></div>`;
+    try {
+      const res = await fetch(`${getApiUrl()}/portfolio-impact/${eventId}?force_refresh=${btn.dataset.refresh === 'true'}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.status !== 'ok') throw new Error(JSON.stringify(data));
+      const impacts = data.impacts || [];
+      const evidence = data.evidence || {};
+      const positive = impacts.filter(i => i.impact_direction === 'positive');
+      const negative = impacts.filter(i => i.impact_direction === 'negative');
+      const neutral = impacts.filter(i => i.impact_direction === 'neutral');
+
+      const renderEvidence = (coinId, color) => {
+        const ev = evidence[coinId];
+        if (!ev || !ev.sources || ev.sources.length === 0) return '';
+        const sourceItems = ev.sources.map(s => `
+          <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px">
+            <span style="font-size:10px;min-width:14px">${s.supports_thesis ? '⚠️' : '✅'}</span>
+            <div>
+              <div style="font-size:9px;color:${s.supports_thesis ? color : 'var(--bull)'};font-weight:600">${s.label}</div>
+              <div style="font-size:9px;color:var(--text-dim)">${s.signal}</div>
+            </div>
+          </div>`).join('');
+        return `
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid ${color}22">
+            <div style="font-size:8px;color:${color};text-transform:uppercase;letter-spacing:0.12em;margin-bottom:5px;opacity:0.7">⬡ On-Chain Evidence</div>
+            ${sourceItems}
+          </div>`;
+      };
+
+      const renderTokens = (tokens, color, label) => tokens.length ? `
+        <div style="margin-bottom:14px">
+          <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:${color};margin-bottom:8px">${label}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${tokens.map(t => `
+              <div style="background:var(--surface);border:1px solid ${color}44;padding:10px 14px;min-width:180px;max-width:300px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${color}">${t.symbol}</span>
+                  <span style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;border:1px solid ${color}44;padding:1px 5px">${t.impact_severity}</span>
+                </div>
+                ${t.mechanism ? `<div style="font-size:9px;color:${color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;opacity:0.8">${t.mechanism}</div>` : ''}
+                <div style="font-size:10px;color:var(--text-dim);line-height:1.6">${t.rationale}</div>
+                <div style="font-size:9px;color:var(--text-dim);margin-top:5px;opacity:0.6">confidence: ${Math.round((t.confidence||0)*100)}%</div>
+                ${renderEvidence(t.coin_id, color)}
+              </div>`).join('')}
+          </div>
+        </div>` : '';
+      container.innerHTML = `
+        ${data.summary ? `<div style="background:var(--surface);border-left:3px solid var(--accent);padding:12px 16px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text);font-family:'Syne',sans-serif">${data.summary}</div>` : ''}
+        ${renderTokens(negative, 'var(--bear)', '▼ Negative Impact')}
+        ${renderTokens(positive, 'var(--bull)', '▲ Positive Impact')}
+        ${renderTokens(neutral, 'var(--text-dim)', '— Neutral / Watch')}
+        ${data.cached ? `<div style="font-size:9px;color:var(--text-dim);margin-top:8px;letter-spacing:0.1em">↻ Cached — <span style="cursor:pointer;text-decoration:underline" onclick="this.closest('[data-id]') && (this.closest('[data-id]').dataset.refresh='true') && this.closest('[data-id]').click()">Re-analyze</span></div>` : ''}
+      `;
+      btn.textContent = data.cached ? '⬡ Re-analyze' : '⬡ Analyzed ✓';
+      btn.dataset.refresh = 'true';
+      btn.disabled = false;
+    } catch(e) {
+      container.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+      btn.textContent = '⬡ Analyze Impact';
+      btn.disabled = false;
+    }
+  }
+
+  function openJudge(eventId, description) {
+    if (!currentJudgeName) { showJudgeSelector(); return; }
+    currentJudgeId = eventId;
+    document.getElementById('judgeEventId').textContent = eventId;
+    document.getElementById('judgeDescription').textContent = description;
+    document.getElementById('judgeModalName').textContent = currentJudgeName;
+    // Reset sliders
+    ['logic','truth','source'].forEach(k => {
+      document.getElementById(`score_${k}`).value = 3;
+      document.getElementById(`score_${k}_val`).textContent = '3';
+    });
+    document.getElementById('judgeNotes').value = '';
+    document.getElementById('judgeBias').value = '';
+    document.getElementById('judgeResult').textContent = '';
+    document.getElementById('judgeModal').style.display = 'flex';
+  }
+
+  function closeJudge() {
+    document.getElementById('judgeModal').style.display = 'none';
+    currentJudgeId = null;
+  }
+
+  async function submitJudge() {
+    if (!currentJudgeId) return;
+    if (!currentJudgeName) { showJudgeSelector(); return; }
+    const scores = {
+      logic: parseFloat(document.getElementById('score_logic').value),
+      truth: parseFloat(document.getElementById('score_truth').value),
+      source: parseFloat(document.getElementById('score_source').value),
+    };
+    scores.average = ((scores.logic + scores.truth + scores.source) / 3).toFixed(2);
+    const notes = document.getElementById('judgeNotes').value;
+    const bias_tag = document.getElementById('judgeBias').value || null;
+    const btn = document.getElementById('judgeSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    try {
+      const res = await fetch(`${getApiUrl()}/judge/${currentJudgeId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({event_id: currentJudgeId, judge_name: currentJudgeName, scores, notes, bias_tag})
+      });
+      const data = await res.json();
+      if (data.status === 'judged') {
+        document.getElementById('judgeResult').textContent = `✓ Judgment recorded by ${currentJudgeName}`;
+        document.getElementById('judgeResult').style.color = 'var(--bull)';
+        loadStats();
+        setTimeout(() => { closeJudge(); loadCorpus(false); }, 1200);
+      } else {
+        throw new Error(JSON.stringify(data));
+      }
+    } catch(e) {
+      document.getElementById('judgeResult').textContent = `Error: ${e.message}`;
+      document.getElementById('judgeResult').style.color = 'var(--danger)';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Submit Judgment';
+    }
+  }
+
+  const JUDGES = ['David', 'Jeff', 'Katie', 'Topher', 'Joey', 'Wes', 'Andrew', 'Alex', 'Rayne'];
+  let currentJudgeName = localStorage.getItem('collectiveJudgeName') || null;
+
+  function showJudgeSelector() {
+    document.getElementById('judgeSelectorModal').style.display = 'flex';
+  }
+
+  function selectJudge(name) {
+    currentJudgeName = name;
+    localStorage.setItem('collectiveJudgeName', name);
+    document.getElementById('judgeSelectorModal').style.display = 'none';
+    document.getElementById('currentJudgeName').textContent = name;
+  }
+
+  // Auto-connect on load
+  window.addEventListener('load', () => {
+    setTimeout(checkHealth, 500);
+    document.getElementById('currentJudgeName').textContent = currentJudgeName || 'Select Judge';
+    if (!currentJudgeName) showJudgeSelector();
+  });
+
+  async function loadJudgeAnalytics() {
+    const body = document.getElementById('analyticsBody');
+    body.innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Loading judge analytics...</div></div>`;
+
+    try {
+      const res = await fetch(getApiUrl() + '/stats/judges');
+      const data = await res.json();
+
+      if (data.status !== 'ok') {
+        body.innerHTML = `<div class="error-msg">Error loading analytics: ${data.detail || 'Unknown error'}</div>`;
+        return;
+      }
+
+      const { summary, judges, distributions, consensus_items } = data;
+
+      // Build distribution lookup: judge -> bucket -> count
+      const distMap = {};
+      distributions.forEach(d => {
+        if (!distMap[d.judge_name]) distMap[d.judge_name] = {};
+        distMap[d.judge_name][d.score_bucket] = d.count;
+      });
+
+      const buckets = ['5 - Exceptional', '4 - Strong', '3 - Moderate', '2 - Weak', '1 - Poor'];
+      const bucketColors = ['#00d4aa', '#4a9eff', '#f0b429', '#ff6b6b', '#666'];
+
+      // Judge cards
+      const judgeCardsHtml = judges.map(j => {
+        const lastActive = j.last_active ? new Date(j.last_active).toLocaleDateString() : 'never';
+        const dist = distMap[j.judge_name] || {};
+        const total = j.total_judgments;
+
+        // Mini bar chart
+        const barsHtml = buckets.map((b, i) => {
+          const count = dist[b] || 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <div style="width:80px;font-size:9px;color:var(--text-dim);text-align:right">${b.split(' - ')[1]}</div>
+            <div style="flex:1;height:8px;background:var(--bg-tertiary);border-radius:2px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:${bucketColors[i]};border-radius:2px"></div>
+            </div>
+            <div style="width:28px;font-size:9px;color:var(--text-dim)">${count}</div>
+          </div>`;
+        }).join('');
+
+        const scoreColor = j.avg_score >= 4 ? '#00d4aa' : j.avg_score >= 3 ? '#f0b429' : '#ff6b6b';
+
+        return `<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:220px;flex:1">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text-primary)">${j.judge_name}</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Last active: ${lastActive}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:22px;font-weight:700;color:${scoreColor}">${j.avg_score}</div>
+              <div style="font-size:9px;color:var(--text-dim)">avg score</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-bottom:12px">
+            <div style="text-align:center">
+              <div style="font-size:16px;font-weight:600;color:var(--accent)">${j.total_judgments}</div>
+              <div style="font-size:9px;color:var(--text-dim)">judged</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:16px;font-weight:600;color:#00d4aa">${j.high_scores}</div>
+              <div style="font-size:9px;color:var(--text-dim)">high (4+)</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:16px;font-weight:600;color:#ff6b6b">${j.low_scores}</div>
+              <div style="font-size:9px;color:var(--text-dim)">low (≤2)</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">Score Distribution</div>
+          ${barsHtml}
+          <div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:var(--text-secondary)">${j.avg_logic}</div>
+              <div style="font-size:9px;color:var(--text-dim)">Logic</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:var(--text-secondary)">${j.avg_truth}</div>
+              <div style="font-size:9px;color:var(--text-dim)">Truth</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:var(--text-secondary)">${j.avg_source}</div>
+              <div style="font-size:9px;color:var(--text-dim)">Source</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Consensus items table
+      const consensusHtml = consensus_items.length > 0 ? consensus_items.map(item => {
+        const spread = parseFloat(item.score_spread || 0).toFixed(1);
+        const spreadColor = spread >= 2 ? '#ff6b6b' : spread >= 1 ? '#f0b429' : '#00d4aa';
+        return `<tr>
+          <td style="max-width:300px;font-size:11px;color:var(--text-secondary)">${item.description.substring(0,80)}${item.description.length > 80 ? '...' : ''}</td>
+          <td style="text-align:center;font-size:12px;font-weight:600;color:var(--accent)">${item.judge_count}</td>
+          <td style="text-align:center;font-size:12px;font-weight:600;color:var(--text-primary)">${item.consensus_score}</td>
+          <td style="text-align:center;font-size:12px;font-weight:600;color:${spreadColor}">${spread}</td>
+          <td style="font-size:10px;color:var(--text-dim)">${(item.judges || []).join(', ')}</td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">No entries judged by multiple people yet</td></tr>`;
+
+      body.innerHTML = `
+        <!-- Summary bar -->
+        <div style="display:flex;gap:24px;padding:16px 20px;background:var(--bg-secondary);border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:22px;font-weight:700;color:var(--accent)">${summary.total_judgments}</div>
+            <div style="font-size:10px;color:var(--text-dim)">Total Judgments</div>
+          </div>
+          <div>
+            <div style="font-size:22px;font-weight:700;color:var(--text-primary)">${summary.total_events_judged}</div>
+            <div style="font-size:10px;color:var(--text-dim)">Events Judged</div>
+          </div>
+          <div>
+            <div style="font-size:22px;font-weight:700;color:#00d4aa">${summary.active_judges}</div>
+            <div style="font-size:10px;color:var(--text-dim)">Active Judges</div>
+          </div>
+        </div>
+
+        <!-- Judge cards -->
+        <div style="padding:16px 20px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Judge Profiles</div>
+          ${judges.length > 0 
+            ? `<div style="display:flex;flex-wrap:wrap;gap:12px">${judgeCardsHtml}</div>`
+            : `<div style="color:var(--text-dim);font-size:13px;padding:20px 0">No judgments yet — start judging corpus entries.</div>`
+          }
+        </div>
+
+        <!-- Consensus table -->
+        <div style="padding:0 20px 20px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Multi-Judge Consensus Items</div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;font-size:10px;color:var(--text-dim);padding:6px 0;font-weight:500">Event</th>
+                <th style="text-align:center;font-size:10px;color:var(--text-dim);padding:6px 8px;font-weight:500">Judges</th>
+                <th style="text-align:center;font-size:10px;color:var(--text-dim);padding:6px 8px;font-weight:500">Consensus</th>
+                <th style="text-align:center;font-size:10px;color:var(--text-dim);padding:6px 8px;font-weight:500">Spread</th>
+                <th style="text-align:left;font-size:10px;color:var(--text-dim);padding:6px 8px;font-weight:500">Who</th>
+              </tr>
+            </thead>
+            <tbody>${consensusHtml}</tbody>
+          </table>
+        </div>`;
+
+    } catch(e) {
+      body.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    }
+  }
+
+
+  async function loadSentiment() {
+    const asset = document.getElementById('sentimentAsset').value.trim().toUpperCase();
+    const context = document.getElementById('sentimentContext').value.trim();
+    const result = document.getElementById('sentimentResult');
+    if (!asset) { result.innerHTML = '<div class="error-msg">Enter an asset symbol</div>'; return; }
+
+    result.innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Asking Grok about ${asset} on X...</div></div>`;
+
+    try {
+      let url = `${getApiUrl()}/sentiment/${asset}`;
+      if (context) url += `?context=${encodeURIComponent(context)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status !== 'ok') { result.innerHTML = `<div class="error-msg">${data.detail}</div>`; return; }
+
+      const s = data.sentiment;
+      const score = s.crowd_sentiment_score || 5;
+      const scoreColor = score >= 7 ? '#00d4aa' : score >= 4 ? '#f0b429' : '#ff6b6b';
+      const label = s.sentiment_label || 'neutral';
+
+      const narrativesHtml = (s.dominant_narratives || []).map(n =>
+        `<div style="padding:6px 10px;background:var(--bg-tertiary);border-radius:4px;font-size:11px;color:var(--text-secondary)">▸ ${n}</div>`
+      ).join('');
+
+      result.innerHTML = `
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              <div style="font-size:20px;font-weight:700;color:var(--text-primary)">${asset}</div>
+              <div style="font-size:12px;color:${scoreColor};text-transform:uppercase;font-weight:600;margin-top:2px">${label}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:36px;font-weight:700;color:${scoreColor}">${score.toFixed(1)}</div>
+              <div style="font-size:10px;color:var(--text-dim)">/ 10 crowd score</div>
+            </div>
+          </div>
+
+          <!-- Score bar -->
+          <div style="height:6px;background:var(--bg-tertiary);border-radius:3px;margin-bottom:16px;overflow:hidden">
+            <div style="width:${score*10}%;height:100%;background:${scoreColor};border-radius:3px;transition:width 0.5s"></div>
+          </div>
+
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:14px">${s.sentiment_summary || ''}</div>
+
+          ${narrativesHtml ? `
+          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dominant Narratives</div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px">${narrativesHtml}</div>` : ''}
+
+          ${s.price_driver_theory ? `
+          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Price Driver Theory</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">${s.price_driver_theory}</div>` : ''}
+
+          ${s.contrarian_signals ? `
+          <div style="padding:10px 12px;background:rgba(240,180,41,0.08);border:1px solid rgba(240,180,41,0.2);border-radius:6px;font-size:11px;color:#f0b429">
+            ⚠ Contrarian: ${s.contrarian_signals}
+          </div>` : ''}
+
+          <div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text-dim)">Volume: <span style="color:var(--text-secondary)">${s.post_volume || 'unknown'}</span></div>
+            <div style="font-size:10px;color:var(--text-dim)">Confidence: <span style="color:var(--text-secondary)">${((s.confidence||0)*100).toFixed(0)}%</span></div>
+            <div style="font-size:10px;color:var(--text-dim)">Data: <span style="color:var(--text-secondary)">${s.data_freshness || 'real-time'}</span></div>
+          </div>
+        </div>`;
+    } catch(e) {
+      result.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    }
+  }
+
+  async function loadPriceDriver() {
+    const asset = document.getElementById('driverAsset').value.trim().toUpperCase();
+    const change = parseFloat(document.getElementById('driverChange').value) || 0;
+    const result = document.getElementById('driverResult');
+    if (!asset) { result.innerHTML = '<div class="error-msg">Enter an asset symbol</div>'; return; }
+
+    result.innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Asking Grok why ${asset} is moving...</div></div>`;
+
+    try {
+      const res = await fetch(`${getApiUrl()}/price-driver/${asset}?price_change_pct=${change}`);
+      const data = await res.json();
+      if (data.status !== 'ok') { result.innerHTML = `<div class="error-msg">${data.detail}</div>`; return; }
+
+      const a = data.analysis;
+      const direction = change >= 0 ? '▲' : '▼';
+      const changeColor = change >= 0 ? '#00d4aa' : '#ff6b6b';
+
+      const factorsHtml = (a.supporting_factors || []).map(f =>
+        `<div style="padding:5px 10px;background:var(--bg-tertiary);border-radius:4px;font-size:11px;color:var(--text-secondary)">✓ ${f}</div>`
+      ).join('');
+
+      const disputedHtml = (a.disputed_narratives || []).map(n =>
+        `<div style="padding:5px 10px;background:var(--bg-tertiary);border-radius:4px;font-size:11px;color:var(--text-dim)">✗ ${n}</div>`
+      ).join('');
+
+      const typeFlags = [
+        a.is_fundamental ? '📊 Fundamental' : null,
+        a.is_technical ? '📈 Technical' : null,
+        a.is_sentiment_driven ? '💬 Sentiment' : null,
+      ].filter(Boolean);
+
+      result.innerHTML = `
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div style="font-size:20px;font-weight:700;color:var(--text-primary)">${asset}</div>
+            <div style="font-size:24px;font-weight:700;color:${changeColor}">${direction} ${Math.abs(change).toFixed(1)}%</div>
+          </div>
+
+          <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Leading Explanation</div>
+          <div style="font-size:13px;color:var(--text-primary);font-weight:500;line-height:1.6;margin-bottom:14px">${a.leading_explanation || ''}</div>
+
+          ${a.key_posts_summary ? `
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:14px;padding:10px 12px;background:var(--bg-tertiary);border-radius:6px">${a.key_posts_summary}</div>` : ''}
+
+          ${factorsHtml ? `
+          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Supporting Factors</div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px">${factorsHtml}</div>` : ''}
+
+          ${disputedHtml ? `
+          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Disputed / Rejected</div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px">${disputedHtml}</div>` : ''}
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            ${typeFlags.map(f => `<div style="padding:4px 10px;background:var(--bg-tertiary);border-radius:12px;font-size:11px;color:var(--text-secondary)">${f}</div>`).join('')}
+            <div style="padding:4px 10px;background:var(--bg-tertiary);border-radius:12px;font-size:11px;color:var(--text-dim)">Confidence: ${((a.confidence||0)*100).toFixed(0)}%</div>
+          </div>
+        </div>`;
+    } catch(e) {
+      result.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    }
+  }
+
+</script>
+
+<!-- Judge Modal -->
+<div id="judgeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--surface);border:1px solid var(--border);width:560px;max-width:95vw;padding:32px;position:relative">
+    
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase">Consensus Chamber</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;letter-spacing:0.15em;text-transform:uppercase">
+          Judging as: <span id="judgeModalName" style="color:var(--accent)">—</span>
+          <span onclick="showJudgeSelector()" style="color:var(--text-dim);cursor:pointer;margin-left:6px;text-decoration:underline">change</span>
+        </div>
+      </div>
+      <button onclick="closeJudge()" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:0;line-height:1">✕</button>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);padding:12px;margin-bottom:24px">
+      <div style="font-size:9px;color:var(--accent);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:6px">Event</div>
+      <div id="judgeDescription" style="font-size:12px;color:var(--text);line-height:1.6"></div>
+      <div id="judgeEventId" style="font-size:10px;color:var(--text-dim);margin-top:6px"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:24px">
+
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-mid)">Logic Chamber <span style="color:var(--text-dim)">— Reasoning quality, structural integrity</span></div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--accent)" id="score_logic_val">3</div>
+        </div>
+        <input type="range" min="1" max="5" step="1" value="3" id="score_logic" style="width:100%;accent-color:var(--accent)"
+          oninput="document.getElementById('score_logic_val').textContent=this.value">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px"><span>Poor</span><span>Excellent</span></div>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-mid)">Truth Chamber <span style="color:var(--text-dim)">— Factual accuracy, logical consistency</span></div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--accent)" id="score_truth_val">3</div>
+        </div>
+        <input type="range" min="1" max="5" step="1" value="3" id="score_truth" style="width:100%;accent-color:var(--accent)"
+          oninput="document.getElementById('score_truth_val').textContent=this.value">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px"><span>Poor</span><span>Excellent</span></div>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-mid)">Source Chamber <span style="color:var(--text-dim)">— Attribution verification, provenance</span></div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--accent)" id="score_source_val">3</div>
+        </div>
+        <input type="range" min="1" max="5" step="1" value="3" id="score_source" style="width:100%;accent-color:var(--accent)"
+          oninput="document.getElementById('score_source_val').textContent=this.value">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px"><span>Poor</span><span>Excellent</span></div>
+      </div>
+
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Conviction Driver <span style="color:var(--text-dim);font-size:9px;text-transform:none;letter-spacing:0">(optional — what's driving your score?)</span></div>
+      <select id="judgeBias" class="form-input" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;font-size:11px;letter-spacing:0.05em">
+        <option value="">— Select if applicable —</option>
+        <option value="Fundamentals">The data supports this — metrics, on-chain, tokenomics</option>
+        <option value="Narrative">The market story is driving this, not the data</option>
+        <option value="Contrarian">I'm going against the crowd on this one</option>
+        <option value="Recency">Something that just happened is heavily influencing my view</option>
+        <option value="Anchoring">A prior price or thesis is coloring how I'm reading this</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Notes (optional)</div>
+      <textarea id="judgeNotes" class="form-input" rows="2" placeholder="Any issues, corrections, context, or incentive structures affecting this view..."></textarea>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div id="judgeResult" style="font-size:11px;letter-spacing:0.1em"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeJudge()">Cancel</button>
+        <button class="btn btn-primary" id="judgeSubmitBtn" onclick="submitJudge()">Submit Judgment</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Judge Selector Modal -->
+<div id="judgeSelectorModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:2000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--surface);border:1px solid var(--border);width:420px;max-width:95vw;padding:36px;text-align:center">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Identify Yourself</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:28px;letter-spacing:0.08em">Select your name to begin judging intelligence entries</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <button onclick="selectJudge('David')"  class="judge-name-btn">David</button>
+      <button onclick="selectJudge('Jeff')"   class="judge-name-btn">Jeff</button>
+      <button onclick="selectJudge('Katie')"  class="judge-name-btn">Katie</button>
+      <button onclick="selectJudge('Topher')" class="judge-name-btn">Topher</button>
+      <button onclick="selectJudge('Joey')"   class="judge-name-btn">Joey</button>
+      <button onclick="selectJudge('Wes')"    class="judge-name-btn">Wes</button>
+      <button onclick="selectJudge('Andrew')" class="judge-name-btn">Andrew</button>
+      <button onclick="selectJudge('Alex')"   class="judge-name-btn">Alex</button>
+      <button onclick="selectJudge('Rayne')"  class="judge-name-btn">Rayne</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
