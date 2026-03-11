@@ -575,7 +575,7 @@ async def health():
 @app.get("/", response_class=HTMLResponse)
 async def landing():
     import os
-    for path in ["collective-landing.html", os.path.join(os.path.dirname(__file__), "..", "collective-landing.html")]:
+for path in ["collective-landing.html", os.path.join(os.path.dirname(__file__), "..", "collective-landing.html"), "/opt/render/project/src/collective-landing.html"]:
         if os.path.exists(path):
             with open(path, "r") as f:
                 return HTMLResponse(content=f.read())
