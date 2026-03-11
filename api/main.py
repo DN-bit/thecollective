@@ -199,6 +199,7 @@ async def init_db():
         await conn.execute("ALTER TABLE corpus ADD COLUMN IF NOT EXISTS agent_id TEXT")
         await conn.execute("ALTER TABLE corpus ADD COLUMN IF NOT EXISTS credence_tier TEXT")
         await conn.execute("ALTER TABLE corpus ADD COLUMN IF NOT EXISTS credence_verified BOOLEAN DEFAULT FALSE")
+        await conn.execute("ALTER TABLE corpus ADD COLUMN IF NOT EXISTS source TEXT")
     finally:
         await conn.close()
 
